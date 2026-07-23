@@ -1,0 +1,7 @@
+node_modules/
+public/img/players/*.png
+public/img/players/dyn/*.png
+server/data/db.json
+server/data/db.json.tmp
+.DS_Store
+.claude/settings.local.json
