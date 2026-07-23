@@ -3,8 +3,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, 'data');
-const DB_FILE = path.join(DATA_DIR, 'db.json');
+// DB_FILE env lets a hosted deploy point at a mounted persistent disk
+// (e.g. Render Disk -> DB_FILE=/var/data/db.json). Defaults to the repo path.
+const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data', 'db.json');
+const DATA_DIR = path.dirname(DB_FILE);
 
 const DEFAULT_DB = {
   users: {},   // id -> user

@@ -1,0 +1,24 @@
+# Render Blueprint — https://render.com 에서 New > Blueprint 로 이 레포를
+# 선택하면 아래 설정대로 게임 서버가 배포됩니다.
+services:
+  - type: web
+    name: football-squad
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /api/bootstrap
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    # ⚠️ free 플랜은 파일시스템이 휘발성이라 재시작/재배포 시 db.json이
+    # 초기화됩니다. 데이터를 보존하려면 starter 플랜 + 디스크를 켜고
+    # DB_FILE을 마운트 경로로 지정하세요:
+    # plan: starter
+    # disk:
+    #   name: data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # envVars:
+    #   - key: DB_FILE
+    #     value: /var/data/db.json
