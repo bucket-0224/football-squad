@@ -465,24 +465,35 @@ function imageSlug(name) {
 
 const IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'img', 'players');
 const TEAM_IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'img', 'teams');
-const imgExists = new Map(); // slug -> bool, checked once per slug
+const imgMeta = new Map(); // slug -> { exists, v } (v = mtime, checked once per slug per process)
+
+// frontend/server.js caches .png responses for 30 days as immutable, so
+// swapping a file in place (same filename) never reaches clients who already
+// fetched the old bytes. Tagging the URL with the file's mtime makes a
+// replaced image a new URL, forcing a real re-fetch — this is baked in once
+// at catalog build time, so it refreshes naturally on every deploy restart.
+function statImg(filePath) {
+  try {
+    return { exists: true, v: Math.round(fs.statSync(filePath).mtimeMs) };
+  } catch {
+    return { exists: false, v: 0 };
+  }
+}
 
 function imageUrlFor(name) {
   const slug = imageSlug(name);
-  if (!imgExists.has(slug)) {
-    imgExists.set(slug, fs.existsSync(path.join(IMG_DIR, slug + '.png')));
-  }
-  return imgExists.get(slug) ? `/img/players/${slug}.png` : null;
+  if (!imgMeta.has(slug)) imgMeta.set(slug, statImg(path.join(IMG_DIR, slug + '.png')));
+  const meta = imgMeta.get(slug);
+  return meta.exists ? `/img/players/${slug}.png?v=${meta.v}` : null;
 }
 
 function teamLogoFor(teamName) {
   if (!teamName) return null;
   const slug = imageSlug(teamName);
   const key = 'team:' + slug;
-  if (!imgExists.has(key)) {
-    imgExists.set(key, fs.existsSync(path.join(TEAM_IMG_DIR, slug + '.png')));
-  }
-  return imgExists.get(key) ? `/img/teams/${slug}.png` : null;
+  if (!imgMeta.has(key)) imgMeta.set(key, statImg(path.join(TEAM_IMG_DIR, slug + '.png')));
+  const meta = imgMeta.get(key);
+  return meta.exists ? `/img/teams/${slug}.png?v=${meta.v}` : null;
 }
 
 // ---------------------------------------------------------------------------
