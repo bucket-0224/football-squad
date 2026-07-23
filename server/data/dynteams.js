@@ -762,9 +762,33 @@ function CURATED_SET_HAS(key) {
   return CURATED_NAMES.includes(key);
 }
 
+// Repo-shipped badge/id seed: fresh deploys (empty db) get every league
+// club's TSDB id + local badge instantly, instead of re-warming 142 teams
+// through the rate-limited API on every boot.
+function seedMeta() {
+  let seed;
+  try {
+    seed = require('./dynmeta-seed.json');
+  } catch {
+    return;
+  }
+  const d = db();
+  let n = 0;
+  Object.entries(seed).forEach(([key, m]) => {
+    const cur = d.dynMeta[key];
+    // fill gaps; also swap a remote badge URL for the bundled local file
+    if (!cur || (!cur.badge && m.badge) || (m.badge && String(m.badge).startsWith('/img/') && cur.badge && /^https?:/.test(cur.badge))) {
+      d.dynMeta[key] = { ...cur, ...m };
+      n++;
+    }
+  });
+  if (n) store.save();
+}
+
 // Re-register persisted dynamic teams/players after a server restart, so the
 // ids the users own keep resolving.
 function restore() {
+  seedMeta();
   const d = db();
   Object.values(d.dynRosters).forEach((def) => {
     try {

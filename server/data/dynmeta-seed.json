@@ -1,0 +1,570 @@
+{
+ "astonvilla": {
+  "id": "133601",
+  "badge": "/img/teams/dyn/astonvilla.png"
+ },
+ "bournemouth": {
+  "id": "134301",
+  "badge": "/img/teams/dyn/bournemouth.png"
+ },
+ "brentford": {
+  "id": "134355",
+  "badge": "/img/teams/dyn/brentford.png"
+ },
+ "brightonandhovealbion": {
+  "id": "133619",
+  "badge": "/img/teams/dyn/brightonandhovealbion.png"
+ },
+ "burnley": {
+  "id": "133623",
+  "badge": "/img/teams/dyn/burnley.png"
+ },
+ "crystalpalace": {
+  "id": "133632",
+  "badge": "/img/teams/dyn/crystalpalace.png"
+ },
+ "everton": {
+  "id": "133615",
+  "badge": "/img/teams/dyn/everton.png"
+ },
+ "fulham": {
+  "id": "133600",
+  "badge": "/img/teams/dyn/fulham.png"
+ },
+ "leedsunited": {
+  "id": "133635",
+  "badge": "/img/teams/dyn/leedsunited.png"
+ },
+ "newcastleunited": {
+  "id": "134777",
+  "badge": "/img/teams/dyn/newcastleunited.png"
+ },
+ "sunderland": {
+  "id": "133603",
+  "badge": "/img/teams/dyn/sunderland.png"
+ },
+ "tottenhamhotspur": {
+  "id": "133616",
+  "badge": "/img/teams/dyn/tottenhamhotspur.png"
+ },
+ "westhamunited": {
+  "id": "133636",
+  "badge": "/img/teams/dyn/westhamunited.png"
+ },
+ "wolverhamptonwanderers": {
+  "id": "133599",
+  "badge": "/img/teams/dyn/wolverhamptonwanderers.png"
+ },
+ "athleticbilbao": {
+  "id": "133727",
+  "badge": "/img/teams/dyn/athleticbilbao.png"
+ },
+ "celtavigo": {
+  "id": "133937",
+  "badge": "/img/teams/dyn/celtavigo.png"
+ },
+ "deportivoalaves": {
+  "id": "134221",
+  "badge": "/img/teams/dyn/deportivoalaves.png"
+ },
+ "elche": {
+  "id": "134384",
+  "badge": "/img/teams/dyn/elche.png"
+ },
+ "espanyol": {
+  "id": "133734",
+  "badge": "/img/teams/dyn/espanyol.png"
+ },
+ "getafe": {
+  "id": "133731",
+  "badge": "/img/teams/dyn/getafe.png"
+ },
+ "girona": {
+  "id": "134700",
+  "badge": "/img/teams/dyn/girona.png"
+ },
+ "levante": {
+  "id": "133732",
+  "badge": "/img/teams/dyn/levante.png"
+ },
+ "mallorca": {
+  "id": "133733",
+  "badge": "/img/teams/dyn/mallorca.png"
+ },
+ "osasuna": {
+  "id": "133730",
+  "badge": "/img/teams/dyn/osasuna.png"
+ },
+ "rayovallecano": {
+  "id": "133728",
+  "badge": "/img/teams/dyn/rayovallecano.png"
+ },
+ "realbetis": {
+  "id": "133722",
+  "badge": "/img/teams/dyn/realbetis.png"
+ },
+ "realoviedo": {
+  "id": "135455",
+  "badge": "/img/teams/dyn/realoviedo.png"
+ },
+ "realsociedad": {
+  "id": "133724",
+  "badge": "/img/teams/dyn/realsociedad.png"
+ },
+ "sevilla": {
+  "id": "133735",
+  "badge": "/img/teams/dyn/sevilla.png"
+ },
+ "valencia": {
+  "id": "133725",
+  "badge": "/img/teams/dyn/valencia.png"
+ },
+ "villarreal": {
+  "id": "133740",
+  "badge": "/img/teams/dyn/villarreal.png"
+ },
+ "bayerleverkusen": {
+  "id": "133666",
+  "badge": "/img/teams/dyn/bayerleverkusen.png"
+ },
+ "rbleipzig": {
+  "id": "134695",
+  "badge": "/img/teams/dyn/rbleipzig.png"
+ },
+ "eintrachtfrankfurt": {
+  "id": "133814",
+  "badge": "/img/teams/dyn/eintrachtfrankfurt.png"
+ },
+ "scfreiburg": {
+  "id": "133653",
+  "badge": "/img/teams/dyn/scfreiburg.png"
+ },
+ "vfbstuttgart": {
+  "id": "133660",
+  "badge": "/img/teams/dyn/vfbstuttgart.png"
+ },
+ "vflwolfsburg": {
+  "id": "133655",
+  "badge": "/img/teams/dyn/vflwolfsburg.png"
+ },
+ "borussiamonchengladbach": {
+  "id": "134779",
+  "badge": "/img/teams/dyn/borussiamonchengladbach.png"
+ },
+ "mainz05": {
+  "id": "147772",
+  "badge": "/img/teams/dyn/mainz05.png"
+ },
+ "fcaugsburg": {
+  "id": "133652",
+  "badge": "/img/teams/dyn/fcaugsburg.png"
+ },
+ "werderbremen": {
+  "id": "133662",
+  "badge": "/img/teams/dyn/werderbremen.png"
+ },
+ "fcheidenheim": {
+  "id": "134696",
+  "badge": "/img/teams/dyn/fcheidenheim.png"
+ },
+ "unionberlin": {
+  "id": "134690",
+  "badge": "/img/teams/dyn/unionberlin.png"
+ },
+ "tsghoffenheim": {
+  "id": "133657",
+  "badge": "/img/teams/dyn/tsghoffenheim.png"
+ },
+ "fcstpauli": {
+  "id": "152832",
+  "badge": "/img/teams/dyn/fcstpauli.png"
+ },
+ "fckoln": {
+  "id": "133654",
+  "badge": "/img/teams/dyn/fckoln.png"
+ },
+ "juventus": {
+  "id": "133676",
+  "badge": "/img/teams/dyn/juventus.png"
+ },
+ "asroma": {
+  "id": "133682",
+  "badge": "/img/teams/dyn/asroma.png"
+ },
+ "lazio": {
+  "id": "133668",
+  "badge": "/img/teams/dyn/lazio.png"
+ },
+ "atalanta": {
+  "id": "134782",
+  "badge": "/img/teams/dyn/atalanta.png"
+ },
+ "fiorentina": {
+  "id": "133674",
+  "badge": "/img/teams/dyn/fiorentina.png"
+ },
+ "bologna": {
+  "id": "134781",
+  "badge": "/img/teams/dyn/bologna.png"
+ },
+ "torino": {
+  "id": "133687",
+  "badge": "/img/teams/dyn/torino.png"
+ },
+ "udinese": {
+  "id": "133679",
+  "badge": "/img/teams/dyn/udinese.png"
+ },
+ "genoa": {
+  "id": "133675",
+  "badge": "/img/teams/dyn/genoa.png"
+ },
+ "como": {
+  "id": "134243",
+  "badge": "/img/teams/dyn/como.png"
+ },
+ "hellasverona": {
+  "id": "134784",
+  "badge": "/img/teams/dyn/hellasverona.png"
+ },
+ "cagliari": {
+  "id": "134783",
+  "badge": "/img/teams/dyn/cagliari.png"
+ },
+ "hamburgersv": {
+  "id": "133651",
+  "badge": "/img/teams/dyn/hamburgersv.png"
+ },
+ "angers": {
+  "id": "134709",
+  "badge": "/img/teams/dyn/angers.png"
+ },
+ "auxerre": {
+  "id": "134788",
+  "badge": "/img/teams/dyn/auxerre.png"
+ },
+ "brest": {
+  "id": "133704",
+  "badge": "/img/teams/dyn/brest.png"
+ },
+ "lehavre": {
+  "id": "133862",
+  "badge": "/img/teams/dyn/lehavre.png"
+ },
+ "lens": {
+  "id": "133822",
+  "badge": "/img/teams/dyn/lens.png"
+ },
+ "lille": {
+  "id": "133711",
+  "badge": "/img/teams/dyn/lille.png"
+ },
+ "lorient": {
+  "id": "133715",
+  "badge": "/img/teams/dyn/lorient.png"
+ },
+ "lyon": {
+  "id": "133713",
+  "badge": "/img/teams/dyn/lyon.png"
+ },
+ "marseille": {
+  "id": "133707",
+  "badge": "/img/teams/dyn/marseille.png"
+ },
+ "nice": {
+  "id": "133712",
+  "badge": "/img/teams/dyn/nice.png"
+ },
+ "atlantaunited": {
+  "id": "135851",
+  "badge": "/img/teams/dyn/atlantaunited.png"
+ },
+ "austinfc": {
+  "id": "140079",
+  "badge": "/img/teams/dyn/austinfc.png"
+ },
+ "cfmontreal": {
+  "id": "134150",
+  "badge": "/img/teams/dyn/cfmontreal.png"
+ },
+ "charlottefc": {
+  "id": "140078",
+  "badge": "/img/teams/dyn/charlottefc.png"
+ },
+ "chicagofire": {
+  "id": "134154",
+  "badge": "/img/teams/dyn/chicagofire.png"
+ },
+ "coloradorapids": {
+  "id": "134794",
+  "badge": "/img/teams/dyn/coloradorapids.png"
+ },
+ "columbuscrew": {
+  "id": "134152",
+  "badge": "/img/teams/dyn/columbuscrew.png"
+ },
+ "dcunited": {
+  "id": "134145",
+  "badge": "/img/teams/dyn/dcunited.png"
+ },
+ "fccincinnati": {
+  "id": "136688",
+  "badge": "/img/teams/dyn/fccincinnati.png"
+ },
+ "fcdallas": {
+  "id": "134146",
+  "badge": "/img/teams/dyn/fcdallas.png"
+ },
+ "lagalaxy": {
+  "id": "134153",
+  "badge": "/img/teams/dyn/lagalaxy.png"
+ },
+ "atleticomineiro": {
+  "id": "134299",
+  "badge": "/img/teams/dyn/atleticomineiro.png"
+ },
+ "bahia": {
+  "id": "134293",
+  "badge": "/img/teams/dyn/bahia.png"
+ },
+ "botafogo": {
+  "id": "134285",
+  "badge": "/img/teams/dyn/botafogo.png"
+ },
+ "redbullbragantino": {
+  "id": "134736",
+  "badge": "/img/teams/dyn/redbullbragantino.png"
+ },
+ "corinthians": {
+  "id": "134284",
+  "badge": "/img/teams/dyn/corinthians.png"
+ },
+ "cruzeiro": {
+  "id": "134294",
+  "badge": "/img/teams/dyn/cruzeiro.png"
+ },
+ "flamengo": {
+  "id": "134287",
+  "badge": "/img/teams/dyn/flamengo.png"
+ },
+ "bucheonfc1995": {
+  "id": "139783",
+  "badge": "/img/teams/dyn/bucheonfc1995.png"
+ },
+ "daejeonhanacitizen": {
+  "id": "139785",
+  "badge": "/img/teams/dyn/daejeonhanacitizen.png"
+ },
+ "fcanyang": {
+  "id": "139786",
+  "badge": "/img/teams/dyn/fcanyang.png"
+ },
+ "fcseoul": {
+  "id": "138115",
+  "badge": "/img/teams/dyn/fcseoul.png"
+ },
+ "gangwonfc": {
+  "id": "138108",
+  "badge": "/img/teams/dyn/gangwonfc.png"
+ },
+ "gimcheonsangmu": {
+  "id": "138113",
+  "badge": "/img/teams/dyn/gimcheonsangmu.png"
+ },
+ "gwangjufc": {
+  "id": "138109",
+  "badge": "/img/teams/dyn/gwangjufc.png"
+ },
+ "jejusk": {
+  "id": "139078",
+  "badge": "/img/teams/dyn/jejusk.png"
+ },
+ "jeonbukhyundaimotors": {
+  "id": "138111",
+  "badge": "/img/teams/dyn/jeonbukhyundaimotors.png"
+ },
+ "ulsanhd": {
+  "id": "138117",
+  "badge": "/img/teams/dyn/ulsanhd.png"
+ },
+ "parma": {
+  "id": "135728",
+  "badge": "/img/teams/dyn/parma.png"
+ },
+ "lecce": {
+  "id": "133678",
+  "badge": "/img/teams/dyn/lecce.png"
+ },
+ "pisa": {
+  "id": "133859",
+  "badge": "/img/teams/dyn/pisa.png"
+ },
+ "cremonese": {
+  "id": "134224",
+  "badge": "/img/teams/dyn/cremonese.png"
+ },
+ "sassuolo": {
+  "id": "133701",
+  "badge": "/img/teams/dyn/sassuolo.png"
+ },
+ "monaco": {
+  "id": "133823",
+  "badge": "/img/teams/dyn/monaco.png"
+ },
+ "rennes": {
+  "id": "133719",
+  "badge": "/img/teams/dyn/rennes.png"
+ },
+ "strasbourg": {
+  "id": "133882",
+  "badge": "/img/teams/dyn/strasbourg.png"
+ },
+ "toulouse": {
+  "id": "133703",
+  "badge": "/img/teams/dyn/toulouse.png"
+ },
+ "nantes": {
+  "id": "133861",
+  "badge": "/img/teams/dyn/nantes.png"
+ },
+ "metz": {
+  "id": "133883",
+  "badge": "/img/teams/dyn/metz.png"
+ },
+ "parisfc": {
+  "id": "135465",
+  "badge": "/img/teams/dyn/parisfc.png"
+ },
+ "houstondynamo": {
+  "id": "134144",
+  "badge": "/img/teams/dyn/houstondynamo.png"
+ },
+ "sportingkansascity": {
+  "id": "134143",
+  "badge": "/img/teams/dyn/sportingkansascity.png"
+ },
+ "minnesotaunited": {
+  "id": "135852",
+  "badge": "/img/teams/dyn/minnesotaunited.png"
+ },
+ "nashvillesc": {
+  "id": "137700",
+  "badge": "/img/teams/dyn/nashvillesc.png"
+ },
+ "newenglandrevolution": {
+  "id": "134159",
+  "badge": "/img/teams/dyn/newenglandrevolution.png"
+ },
+ "newyorkcityfc": {
+  "id": "134630",
+  "badge": "/img/teams/dyn/newyorkcityfc.png"
+ },
+ "newyorkredbulls": {
+  "id": "134156",
+  "badge": "/img/teams/dyn/newyorkredbulls.png"
+ },
+ "orlandocity": {
+  "id": "135292",
+  "badge": "/img/teams/dyn/orlandocity.png"
+ },
+ "philadelphiaunion": {
+  "id": "134142",
+  "badge": "/img/teams/dyn/philadelphiaunion.png"
+ },
+ "portlandtimbers": {
+  "id": "134155",
+  "badge": "/img/teams/dyn/portlandtimbers.png"
+ },
+ "realsaltlake": {
+  "id": "134158",
+  "badge": "/img/teams/dyn/realsaltlake.png"
+ },
+ "sandiegofc": {
+  "id": "150261",
+  "badge": "/img/teams/dyn/sandiegofc.png"
+ },
+ "sanjoseearthquakes": {
+  "id": "134157",
+  "badge": "/img/teams/dyn/sanjoseearthquakes.png"
+ },
+ "seattlesounders": {
+  "id": "134149",
+  "badge": "/img/teams/dyn/seattlesounders.png"
+ },
+ "stlouiscity": {
+  "id": "139040",
+  "badge": "/img/teams/dyn/stlouiscity.png"
+ },
+ "torontofc": {
+  "id": "134148",
+  "badge": "/img/teams/dyn/torontofc.png"
+ },
+ "vancouverwhitecaps": {
+  "id": "134147",
+  "badge": "/img/teams/dyn/vancouverwhitecaps.png"
+ },
+ "palmeiras": {
+  "id": "134465",
+  "badge": "/img/teams/dyn/palmeiras.png"
+ },
+ "saopaulo": {
+  "id": "134291",
+  "badge": "/img/teams/dyn/saopaulo.png"
+ },
+ "santos": {
+  "id": "134286",
+  "badge": "/img/teams/dyn/santos.png"
+ },
+ "fluminense": {
+  "id": "134296",
+  "badge": "/img/teams/dyn/fluminense.png"
+ },
+ "vascodagama": {
+  "id": "134282",
+  "badge": "/img/teams/dyn/vascodagama.png"
+ },
+ "gremio": {
+  "id": "134288",
+  "badge": "/img/teams/dyn/gremio.png"
+ },
+ "internacional": {
+  "id": "134281",
+  "badge": "/img/teams/dyn/internacional.png"
+ },
+ "fortaleza": {
+  "id": "136186",
+  "badge": "/img/teams/dyn/fortaleza.png"
+ },
+ "sportrecife": {
+  "id": "136250",
+  "badge": "/img/teams/dyn/sportrecife.png"
+ },
+ "vitoria": {
+  "id": "134280",
+  "badge": "/img/teams/dyn/vitoria.png"
+ },
+ "juventude": {
+  "id": "135887",
+  "badge": "/img/teams/dyn/juventude.png"
+ },
+ "mirassol": {
+  "id": "141181",
+  "badge": "/img/teams/dyn/mirassol.png"
+ },
+ "ceara": {
+  "id": "134744",
+  "badge": "/img/teams/dyn/ceara.png"
+ },
+ "pohangsteelers": {
+  "id": "138112",
+  "badge": "/img/teams/dyn/pohangsteelers.png"
+ },
+ "suwonfc": {
+  "id": "139789",
+  "badge": "/img/teams/dyn/suwonfc.png"
+ },
+ "nottinghamforest": {
+  "id": "133720",
+  "badge": "/img/teams/dyn/nottinghamforest.png"
+ }
+}
