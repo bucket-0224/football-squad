@@ -19,8 +19,9 @@ cd frontend
 npm start
 ```
 
-프론트엔드가 백엔드와 다른 호스트/포트에서 서빙될 경우 `frontend/config.js`의
-`API_BASE` / `WS_BASE`를 실제 백엔드 주소로 바꿔주세요(EC2 배포 시 필수).
+`frontend/config.js`는 접속한 호스트의 3000번 포트를 백엔드로 자동 사용하므로
+로컬/EC2 모두 별도 수정이 필요 없습니다. 백엔드를 다른 호스트에 두거나
+리버스 프록시를 쓴다면 `frontend/config.js`를 직접 수정하세요.
 
 선수 카드 이미지(선택, 저장소 루트에서 실행):
 
@@ -47,8 +48,10 @@ docs/              게임 가이드 (GitBook)
 
 배포 시 `backend/`는 DB와 함께, `frontend/`는 정적 파일 서버로 각각 EC2에
 올리면 됩니다. 같은 인스턴스에 둘 다 올릴 경우 서로 다른 포트를 쓰게 되므로
-`frontend/config.js`에 백엔드 주소를 지정하고, 백엔드의 `CORS_ORIGIN`
-환경변수를 프론트엔드 주소로 설정하세요(비워두면 `*` 허용).
+백엔드의 `CORS_ORIGIN` 환경변수를 프론트엔드 주소로 설정하세요(비워두면 `*` 허용).
+
+`main`에 push하면 GitHub Actions가 EC2로 자동 배포합니다. 최초 설정과 필요한
+repo secrets는 [DEPLOY.md](DEPLOY.md) 참고.
 
 ## 특징
 
