@@ -1,5 +1,5 @@
 node_modules/
-server/data/db.json
-server/data/db.json.tmp
+backend/data/db.json
+backend/data/db.json.tmp
 .DS_Store
 .claude/settings.local.json

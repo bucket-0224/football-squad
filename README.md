@@ -6,12 +6,23 @@
 
 ## 실행
 
+백엔드(API 서버)와 프론트엔드(정적 클라이언트)는 완전히 분리된 프로젝트입니다. 각각 따로 설치·실행하세요.
+
 ```bash
+# 백엔드 (http://localhost:3000)
+cd backend
 npm install
-npm start          # http://localhost:3000
+npm start
+
+# 프론트엔드 (http://localhost:8080, 별도 터미널)
+cd frontend
+npm start
 ```
 
-선수 카드 이미지(선택):
+프론트엔드가 백엔드와 다른 호스트/포트에서 서빙될 경우 `frontend/config.js`의
+`API_BASE` / `WS_BASE`를 실제 백엔드 주소로 바꿔주세요(EC2 배포 시 필수).
+
+선수 카드 이미지(선택, 저장소 루트에서 실행):
 
 ```bash
 node scripts/fetch-player-images.js   # footyrenders/TSDB에서 다운로드
@@ -21,16 +32,23 @@ python3 scripts/crop-upper-body.py    # 상체 크롭 정규화 (Pillow 필요)
 ## 구조
 
 ```
-server/            Express + WebSocket 서버
+backend/           Express + WebSocket 서버 (독립 npm 프로젝트)
   index.js         REST API (인증·스쿼드·이적·팩·강화·예측)
   matchmaking.js   실시간 매치·작전타임·관전 (ws)
   game/            경기 시뮬레이션·포메이션
-  data/            선수 카탈로그·동적 팀(위키+TSDB 로스터)
-public/            클라이언트 (vanilla JS)
+  data/            선수 카탈로그·동적 팀(위키+TSDB 로스터), db.json
+frontend/          클라이언트 (vanilla JS, 독립 npm 프로젝트)
   app.js           UI + 탑뷰 중계 엔진 (EPL 규칙 연출)
+  config.js        백엔드 API 주소 설정
+  server.js        정적 파일 서버 (의존성 없음)
 scripts/           이미지 수집/크롭 도구
 docs/              게임 가이드 (GitBook)
 ```
+
+배포 시 `backend/`는 DB와 함께, `frontend/`는 정적 파일 서버로 각각 EC2에
+올리면 됩니다. 같은 인스턴스에 둘 다 올릴 경우 서로 다른 포트를 쓰게 되므로
+`frontend/config.js`에 백엔드 주소를 지정하고, 백엔드의 `CORS_ORIGIN`
+환경변수를 프론트엔드 주소로 설정하세요(비워두면 `*` 허용).
 
 ## 특징
 

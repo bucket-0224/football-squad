@@ -5,7 +5,7 @@ Run after scripts/fetch-player-images.js:
 
     python3 scripts/crop-upper-body.py [dir]
 
-For each PNG (default: public/img/players/) the subject is read from the
+For each PNG (default: frontend/img/players/) the subject is read from the
 alpha channel and normalized so every card shares the same framing:
 
 1. multi-player renders are flagged (two+ large alpha blobs) and left alone —
@@ -27,7 +27,7 @@ import sys
 from PIL import Image
 
 IMG_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(__file__), "..", "public", "img", "players"
+    os.path.dirname(__file__), "..", "frontend", "img", "players"
 )
 
 FULL_BODY_RATIO = 1.45  # subject taller than this counts as full body

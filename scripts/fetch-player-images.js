@@ -1,6 +1,6 @@
 'use strict';
 
-// Downloads transparent player images into public/img/players/.
+// Downloads transparent player images into frontend/img/players/.
 //
 //   node scripts/fetch-player-images.js [--force]
 //
@@ -18,9 +18,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const players = require('../server/data/players');
+const players = require('../backend/data/players');
 
-const OUT_DIR = path.join(__dirname, '..', 'public', 'img', 'players');
+const OUT_DIR = path.join(__dirname, '..', 'frontend', 'img', 'players');
 const FORCE = process.argv.includes('--force');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0';
 const FOOTY_DELAY_MS = 700;
@@ -101,6 +101,53 @@ const SEARCH_ALIAS = {
   'Maradona (Icon)': 'Diego Maradona',
   'Pele (Icon)': 'Pele',
   'Ronaldo R9 (Icon)': 'Ronaldo Nazario',
+  // 레전드 아이콘 배치 — 실제 렌더/사진 검색용 이름으로 "(Icon)" 접미사만 벗김
+  // (Cristiano Ronaldo/Luka Modric는 현역 로스터 사진을 IMG_ALIAS로 재사용하므로 제외)
+  'Ronaldinho (Icon)': 'Ronaldinho',
+  'Andres Iniesta (Icon)': 'Andres Iniesta',
+  'Xavi Hernandez (Icon)': 'Xavi',
+  'Andrea Pirlo (Icon)': 'Andrea Pirlo',
+  'Paolo Maldini (Icon)': 'Paolo Maldini',
+  'Franco Baresi (Icon)': 'Franco Baresi',
+  'Franz Beckenbauer (Icon)': 'Franz Beckenbauer',
+  'Johan Cruyff (Icon)': 'Johan Cruyff',
+  'Eusebio (Icon)': 'Eusebio',
+  'Alfredo Di Stefano (Icon)': 'Alfredo Di Stefano',
+  'Ferenc Puskas (Icon)': 'Ferenc Puskas',
+  'Garrincha (Icon)': 'Garrincha',
+  'Zico (Icon)': 'Zico',
+  'Romario (Icon)': 'Romario',
+  'Cafu (Icon)': 'Cafu',
+  'Roberto Carlos (Icon)': 'Roberto Carlos',
+  'Marcelo (Icon)': 'Marcelo',
+  'Philipp Lahm (Icon)': 'Philipp Lahm',
+  'Fabio Cannavaro (Icon)': 'Fabio Cannavaro',
+  'Rio Ferdinand (Icon)': 'Rio Ferdinand',
+  'John Terry (Icon)': 'John Terry',
+  'Vincent Kompany (Icon)': 'Vincent Kompany',
+  'Steven Gerrard (Icon)': 'Steven Gerrard',
+  'Frank Lampard (Icon)': 'Frank Lampard',
+  'Patrick Vieira (Icon)': 'Patrick Vieira',
+  'Michael Ballack (Icon)': 'Michael Ballack',
+  'Xabi Alonso (Icon)': 'Xabi Alonso',
+  'David Beckham (Icon)': 'David Beckham',
+  'Thierry Henry (Icon)': 'Thierry Henry',
+  'Didier Drogba (Icon)': 'Didier Drogba',
+  'Samuel Eto o (Icon)': "Samuel Eto'o",
+  'Wayne Rooney (Icon)': 'Wayne Rooney',
+  'Robin van Persie (Icon)': 'Robin van Persie',
+  'Ruud van Nistelrooy (Icon)': 'Ruud van Nistelrooy',
+  'Gabriel Batistuta (Icon)': 'Gabriel Batistuta',
+  'David Villa (Icon)': 'David Villa',
+  'Alessandro Del Piero (Icon)': 'Alessandro Del Piero',
+  'Francesco Totti (Icon)': 'Francesco Totti',
+  'Raul Gonzalez (Icon)': 'Raul',
+  'Kaka (Icon)': 'Kaka',
+  'Michael Owen (Icon)': 'Michael Owen',
+  'Gianluigi Buffon (Icon)': 'Gianluigi Buffon',
+  'Iker Casillas (Icon)': 'Iker Casillas',
+  'Peter Schmeichel (Icon)': 'Peter Schmeichel',
+  'Oliver Kahn (Icon)': 'Oliver Kahn',
 };
 
 // Hand-picked image URLs (e.g. a more dynamic render than the newest one, or

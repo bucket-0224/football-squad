@@ -9,7 +9,7 @@ npm start
 ```
 
 - 기본 포트는 3000이며 `PORT` 환경변수로 변경할 수 있습니다.
-- 데이터는 `server/data/db.json`에 저장됩니다(서버가 자동 생성).
+- 데이터는 `backend/data/db.json`에 저장됩니다(서버가 자동 생성).
 - 선수 카드 이미지는 선택 사항입니다:
   ```bash
   node scripts/fetch-player-images.js   # 렌더/컷아웃 다운로드

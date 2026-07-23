@@ -1,6 +1,6 @@
 'use strict';
 
-// Downloads team logos (transparent PNG) into public/img/teams/.
+// Downloads team logos (transparent PNG) into frontend/img/teams/.
 //
 //   node scripts/fetch-team-logos.js [--force]
 //
@@ -9,9 +9,9 @@
 
 const fs = require('fs');
 const path = require('path');
-const players = require('../server/data/players');
+const players = require('../backend/data/players');
 
-const OUT_DIR = path.join(__dirname, '..', 'public', 'img', 'teams');
+const OUT_DIR = path.join(__dirname, '..', 'frontend', 'img', 'teams');
 const FORCE = process.argv.includes('--force');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36';
 
