@@ -143,8 +143,6 @@ function toast(msg) {
 function setMe(user) {
   state.me = user;
   renderHeader();
-  if (user.complaint) openComplaint(user.complaint);
-  else closeComplaint();
 }
 
 // =====================================================================
@@ -347,11 +345,18 @@ function renderHeader() {
   const badge = $('#mailbox-badge');
   badge.textContent = unclaimed;
   badge.classList.toggle('hidden', unclaimed === 0);
+  const pending = (me.complaints || []).length;
+  const cbadge = $('#complaints-badge');
+  cbadge.textContent = pending;
+  cbadge.classList.toggle('hidden', pending === 0);
 }
 
 $('#btn-logout').onclick = () => logout();
 $('#btn-mailbox').onclick = () => openMailbox();
 $('#btn-mail-close').onclick = () => closeMailbox();
+$('#btn-complaints').onclick = () => openComplaints();
+$('#btn-complaints-close').onclick = () => closeComplaints();
+$('#btn-complaint-close').onclick = () => closeComplaint();
 
 document.querySelectorAll('#main-tabs button').forEach((btn) => {
   btn.onclick = () => {
@@ -367,15 +372,13 @@ document.querySelectorAll('#main-tabs button').forEach((btn) => {
     }
     document.querySelectorAll('#main-tabs button').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
-    ['squad', 'market', 'buyout', 'packs', 'match', 'predict', 'rank', 'team', 'news'].forEach((t) => {
+    ['squad', 'market', 'packs', 'match', 'predict', 'rank', 'news'].forEach((t) => {
       $('#tab-' + t).classList.toggle('hidden', t !== btn.dataset.tab);
     });
     if (btn.dataset.tab === 'squad') renderSquadTab();
     if (btn.dataset.tab === 'market') renderMarket();
-    if (btn.dataset.tab === 'buyout') renderBuyout();
     if (btn.dataset.tab === 'packs') renderPacks();
     if (btn.dataset.tab === 'rank') renderRank();
-    if (btn.dataset.tab === 'team') renderTeamRecord();
     if (btn.dataset.tab === 'news') renderNews();
     if (btn.dataset.tab === 'predict') startPredictPolling();
     else stopPredictPolling();
@@ -391,7 +394,9 @@ document.querySelectorAll('#rank-subtabs button').forEach((btn) => {
     const sub = btn.dataset.subtab;
     $('#rank-sub-board').classList.toggle('hidden', sub !== 'board');
     $('#rank-sub-top').classList.toggle('hidden', sub !== 'top');
+    $('#rank-sub-perf').classList.toggle('hidden', sub !== 'perf');
     if (sub === 'top') renderTopPerformers();
+    if (sub === 'perf') renderTeamRecord();
   };
 });
 
@@ -887,6 +892,7 @@ function renderMarket() {
   const q = $('#market-search').value.trim().toLowerCase();
   const line = $('#market-line').value;
   const enhancedOnly = $('#market-enhanced').checked;
+  const buyoutOnly = $('#market-buyout').checked;
   const ownedSet = new Set(state.me ? state.me.owned : []);
   const list = $('#market-list');
   list.innerHTML = '';
@@ -896,6 +902,7 @@ function renderMarket() {
     if (q && !p.name.toLowerCase().includes(q)) return false;
     if (line && p.line !== line) return false;
     if (enhancedOnly && !p.enhanced) return false;
+    if (buyoutOnly && p.team) return false; // 바이아웃(FA)만: 구단 있는 선수 제외
     return true;
   });
 
@@ -909,7 +916,7 @@ function renderMarket() {
       <div class="cc-actions">
         ${owned
           ? '<span class="starter-tag">보유중</span>'
-          : '<button class="btn small primary nego-btn">협상 시작</button>'}
+          : `<button class="btn small primary nego-btn">${p.team ? '협상 시작' : '바이아웃 협상'}</button>`}
       </div>`;
     const negoBtn = cell.querySelector('.nego-btn');
     if (negoBtn) negoBtn.onclick = () => openNegotiation(p);
@@ -972,39 +979,6 @@ async function remoteFindPlayers(q) {
   }
 }
 
-function renderBuyout() {
-  const q = $('#buyout-search').value.trim().toLowerCase();
-  const list = $('#buyout-list');
-  const ownedSet = new Set(state.me ? state.me.owned : []);
-  list.innerHTML = '';
-
-  state.market
-    .filter((p) => !p.team && !p.youth)
-    .filter((p) => !q || p.name.toLowerCase().includes(q))
-    .forEach((p) => {
-      const owned = ownedSet.has(p.id);
-      const cell = document.createElement('div');
-      cell.className = 'card-cell';
-      cell.innerHTML = `
-        ${cardHTML(p, 'md', { stats: true, flag: 'FA' })}
-        <div class="cc-price">🪙 ${p.price.toLocaleString()}</div>
-        <div class="cc-actions">
-          ${owned
-            ? '<span class="starter-tag">보유중</span>'
-            : '<button class="btn small primary nego-btn">바이아웃 협상</button>'}
-        </div>`;
-      const negoBtn = cell.querySelector('.nego-btn');
-      if (negoBtn) negoBtn.onclick = () => openNegotiation(p);
-      list.appendChild(cell);
-    });
-
-  if (!list.children.length) {
-    list.innerHTML = '<p class="dim">조건에 맞는 FA 선수가 없습니다.</p>';
-  }
-}
-
-$('#buyout-search').oninput = () => renderBuyout();
-
 $('#market-search').oninput = () => {
   marketLimit = 60;
   renderMarket();
@@ -1014,6 +988,10 @@ $('#market-line').onchange = () => {
   renderMarket();
 };
 $('#market-enhanced').onchange = () => {
+  marketLimit = 60;
+  renderMarket();
+};
+$('#market-buyout').onchange = () => {
   marketLimit = 60;
   renderMarket();
 };
@@ -1784,12 +1762,17 @@ function handleWsMessage(msg) {
       else addFeedItem(msg.event.minute + "'", msg.event.text, msg.event.type);
       break;
     case 'phase':
-      addFeedItem('', msg.text, 'phase');
-      showEventBanner(msg.text, 'phase', 2600);
-      // rule: teams swap ends at half time and the away side kicks off the
-      // second half. The staging is deferred until the current play drains —
-      // skipping it when busy made half time silently disappear.
-      if (msg.half && viz.raf) viz.pendingHalf = true;
+      if (msg.half && viz.raf) {
+        // half time text/toast must wait for the actual on-screen swap
+        // (below, when pendingHalf fires) — showing it the instant the
+        // server hits minute 45 popped it early while the animation was
+        // still finishing the first half's backlog.
+        viz.pendingHalf = true;
+        viz.pendingHalfText = msg.text;
+      } else {
+        addFeedItem('', msg.text, 'phase');
+        showEventBanner(msg.text, 'phase', 2600);
+      }
       break;
     case 'paused':
       viz.paused = true;
@@ -1912,11 +1895,13 @@ const viz = {
   secondHalf: false, // 진영 교대: mirrors the rendering after half time
   duel: null, // pending foul: the offender hunts the carrier, whistle on contact
   pendingHalf: false, // 하프타임 대기: staged once the current play drains
+  pendingHalfText: null, // banner/feed text held until the swap actually fires
   names: { home: '', away: '' },
   minute: 0, // latest server minute, used for commentary timestamps
   srvMin: 0, // raw server minute incl. stoppage (91, 92, ...)
   dispMin: 0, // 화면 시계: 지금 보이는 플레이를 따라가는 분 (시뮬 기준 싱크)
   shownMin: -1, // last minute written to the scoreboard
+  matchStartTs: 0, // rAF timestamp of the first frame — anchors the 3분 cap
   possTime: { home: 0, away: 0 }, // measured live possession seconds
   possUiT: 0,
   comCd: 0, // commentary throttle
@@ -1999,6 +1984,12 @@ function vizTakeover(side, carrier) {
 }
 
 const VIZ = { W: 860, H: 520, M: 34 };
+// 전체 재생 시간 상한: 이벤트를 절대 건너뛰지 않되, 큐에 쌓인 백로그(실제
+// 시뮬레이션 데이터)로 남은 재생 시간을 추정해 최대 VIZ_TIME_CAP_SEC 안에는
+// 경기가 끝나도록 배속을 조절한다 (평소엔 1배속, 밀릴 때만 최대 VIZ_MAX_SPEED).
+const VIZ_TIME_CAP_SEC = 180;
+const VIZ_MAX_SPEED = 4;
+const VIZ_AVG_EVENT_SEC = 2.4; // 큐에 쌓인 이벤트 하나가 다 재생되는 데 걸리는 평균 시간
 // Penalty box size — single source of truth shared by the box drawn on the
 // canvas (vizFrame's strokeRect) and the in/out-of-box check below. Depth is
 // measured inward from the goal line, width is centered on the goal.
@@ -2100,6 +2091,7 @@ function vizStart(msg) {
   viz.secondHalf = false;
   viz.duel = null;
   viz.pendingHalf = false;
+  viz.pendingHalfText = null;
   viz.names = { home: msg.home.name || '홈', away: msg.away.name || '어웨이' };
   viz.minute = 0;
   viz.srvMin = 0;
@@ -2110,6 +2102,7 @@ function vizStart(msg) {
   viz.comCd = 0;
   viz.flash = null;
   viz.lastTs = 0;
+  viz.matchStartTs = 0;
   const banner = $('#event-banner');
   if (banner) banner.classList.remove('show');
   viz.raf = requestAnimationFrame(vizFrame);
@@ -2885,16 +2878,30 @@ function vizFrame(ts) {
     viz.raf = null;
     return;
   }
-  // 작전 타임: dt collapses to 0 so every timer/movement freezes in place
-  const dt = viz.paused ? 0 : viz.lastTs ? Math.min((ts - viz.lastTs) / 1000, 0.05) : 0.016;
+  // 작전 타임: wallDt collapses to 0 so every timer/movement freezes in place
+  const wallDt = viz.paused ? 0 : viz.lastTs ? Math.min((ts - viz.lastTs) / 1000, 0.05) : 0.016;
   viz.lastTs = ts;
   viz.now = ts;
+  if (!viz.matchStartTs) viz.matchStartTs = ts;
+
+  // 백로그 배속: 큐에 쌓인 이벤트 수(실제 시뮬레이션 데이터)로 남은 재생
+  // 시간을 추정해, 전체 경기가 VIZ_TIME_CAP_SEC(최대 3분) 안에 끝나도록
+  // 배속을 조절한다. 이벤트를 건너뛰지 않고 전부 재생하되 재생 속도만
+  // 균일하게 높인다 — 시계와 실제 선수/공 움직임이 항상 같은 dt를
+  // 공유하므로 시계만 앞서가는 어긋남이 생기지 않는다.
+  const elapsedSec = (ts - viz.matchStartTs) / 1000;
+  const backlogSec =
+    viz.queue.length * VIZ_AVG_EVENT_SEC + (viz.attack ? Math.max(0, viz.attack.timeLeft) : 0);
+  const projectedSec = elapsedSec + backlogSec;
+  const speedMul =
+    projectedSec > VIZ_TIME_CAP_SEC ? Math.min(VIZ_MAX_SPEED, projectedSec / VIZ_TIME_CAP_SEC) : 1;
+  const dt = wallDt * speedMul;
   const ctx = canvas.getContext('2d');
   const { W, H, M } = VIZ;
 
   // ---- 경기 시계: 서버 틱이 아니라 '지금 화면에 보이는 플레이'를 따라간다 ----
   // 목표 분 = 현재 전개 중인 이벤트의 분 (없으면 서버 분까지 자유 진행).
-  // 백로그로 밀리면 가속해 따라잡고, 작전타임(dt=0)에는 함께 얼어붙는다.
+  // dt가 이미 배속을 반영하므로 시계도 같은 배속으로만 따라잡는다.
   const minTarget = viz.attack
     ? viz.attack.e.minute
     : viz.duel
@@ -2903,8 +2910,7 @@ function vizFrame(ts) {
         ? viz.queue[0].minute
         : viz.srvMin;
   if (minTarget > viz.dispMin) {
-    const gap = minTarget - viz.dispMin;
-    const rate = Math.min(6, 1.54 * (1 + gap * 0.35)); // 기본 1분/0.65초, 밀리면 가속
+    const rate = 1.54; // 기본 1분/0.65초 — 서버 TICK_MS(650ms)와 동일한 페이스
     viz.dispMin = Math.min(minTarget, viz.dispMin + rate * dt);
   }
   const shownMin = Math.floor(viz.dispMin);
@@ -3019,6 +3025,11 @@ function vizFrame(ts) {
     if (viz.pendingHalf && (!viz.queue.length || viz.queue[0].minute > 45)) {
       // 하프타임: 전반 플레이가 모두 끝난 뒤 진영 교대 + 어웨이 킥오프
       viz.pendingHalf = false;
+      if (viz.pendingHalfText) {
+        addFeedItem('', viz.pendingHalfText, 'phase');
+        showEventBanner(viz.pendingHalfText, 'phase', 2600);
+        viz.pendingHalfText = null;
+      }
       viz.carrier = null;
       viz.runner = null;
       vizPush(VIZ.W / 2, VIZ.H / 2, 300, {
@@ -3654,20 +3665,28 @@ async function openOpponentSquad(username) {
     $('#oppo-title').textContent = `🔍 ${view.clubName} (${view.username}) 스쿼드`;
     $('#oppo-info').textContent =
       `${view.formation} · 전술: ${state.tactics[view.tactic] || view.tactic} · OVR ${view.ratings.OVR}`;
-    $('#oppo-list').innerHTML = view.starterDetails
-      .map((p, i) => {
-        if (!p) return '<div class="oppo-item"><span class="dim">(빈 슬롯)</span></div>';
-        const pid = view.starters[i];
-        const roleId = view.roles[pid];
-        const roleLabel = roleId && state.roles[roleId] ? state.roles[roleId].label : '';
-        const tag = pid === view.captain ? ' (C)' : pid === view.viceCaptain ? ' (VC)' : '';
-        return `
-        <div class="oppo-item">
-          <span>${escapeHtml(p.name)}${tag} <span class="dim small-text">${p.pos} · OVR ${p.ovr}</span></span>
-          ${roleLabel ? `<span class="oppo-role">${escapeHtml(roleLabel)}</span>` : ''}
-        </div>`;
-      })
-      .join('');
+    const oppoPitch = $('#oppo-pitch');
+    oppoPitch.querySelectorAll('.slot').forEach((s) => s.remove());
+    const slotPos = state.formations[view.formation] || [];
+    const coords = COORDS[view.formation] || COORDS['4-3-3'];
+    view.starterDetails.forEach((p, i) => {
+      const el = document.createElement('div');
+      el.className = 'slot';
+      el.style.left = (coords[i] ? coords[i][0] : 50) + '%';
+      el.style.bottom = (coords[i] ? coords[i][1] : 50) + '%';
+      if (!p) {
+        el.innerHTML = emptySlotHTML(slotPos[i] || '');
+        oppoPitch.appendChild(el);
+        return;
+      }
+      const pid = view.starters[i];
+      const roleId = view.roles[pid];
+      const roleLabel = roleId && state.roles[roleId] ? state.roles[roleId].label : '';
+      const badge = pid === view.captain ? 'C' : pid === view.viceCaptain ? 'VC' : '';
+      el.innerHTML = cardHTML(p, 'xs', { badge });
+      el.title = roleLabel ? `${p.name} · ${roleLabel}` : p.name;
+      oppoPitch.appendChild(el);
+    });
     $('#oppo-overlay').classList.remove('hidden');
   } catch (err) {
     toast(err.message);
@@ -3860,6 +3879,39 @@ async function renderTeamRecord() {
 // 뉴스 (전체 유저 최근 경기 결과)
 // =====================================================================
 
+// 매치당 하나의 리포트 형식(속보/영상/라디오)을 매치 id로 결정 — 새로고침해도
+// 같은 경기는 같은 형식을 유지하고, 목록 전체가 같은 모양으로 단조롭지 않게 한다.
+const NEWS_FORMATS = [
+  { tag: '속보', cls: 'breaking' },
+  { tag: '📺 하이라이트', cls: 'video' },
+  { tag: '📻 라디오 중계', cls: 'radio' },
+];
+function newsFormatFor(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return NEWS_FORMATS[h % NEWS_FORMATS.length];
+}
+
+// 실제 경기 데이터(점수차·점유율·xG) 기반의 한 줄 코멘트 — 포맷별로 말투만 다르게.
+function newsBlurb(m, fmt, winnerName, loserName) {
+  const margin = Math.abs(m.score.home - m.score.away);
+  const poss = m.possession || { home: 50, away: 50 };
+  const dominance = Math.max(poss.home, poss.away);
+  let line;
+  if (margin === 0) {
+    line = `양 팀 모두 승점을 하나씩 나눠 가졌다`;
+  } else if (margin >= 3) {
+    line = `${winnerName}가 시종일관 경기를 압도하며 완승을 거뒀다`;
+  } else if (dominance >= 58) {
+    line = `${winnerName}가 볼 점유를 앞세워 ${loserName}을(를) 무너뜨렸다`;
+  } else {
+    line = `${winnerName}가 접전 끝에 ${loserName}을(를) 힘겹게 꺾었다`;
+  }
+  if (fmt.cls === 'radio') return `"${line}" — 현장 라디오 코멘트`;
+  if (fmt.cls === 'video') return `${line} · 하이라이트 리포트`;
+  return line;
+}
+
 async function renderNews() {
   try {
     const { matches } = await api('GET', '/api/news');
@@ -3874,10 +3926,18 @@ async function renderNews() {
             : winner === 'away'
               ? `${home} ${m.score.home} - ${m.score.away} <b>${away}</b>`
               : `${home} ${m.score.home} - ${m.score.away} ${away} (무승부)`;
+        const fmt = newsFormatFor(m.id);
+        const winnerName = winner === 'home' ? home : winner === 'away' ? away : null;
+        const loserName = winner === 'home' ? away : winner === 'away' ? home : null;
+        const blurb = newsBlurb(m, fmt, winnerName, loserName);
         return `
         <div class="news-item">
-          <span class="news-teams">${teams}</span>
-          <span class="news-date">${new Date(m.at).toLocaleString()}</span>
+          <div class="news-head">
+            <span class="news-badge ${fmt.cls}">${fmt.tag}</span>
+            <span class="news-date">${new Date(m.at).toLocaleString()}</span>
+          </div>
+          <div class="news-teams">${teams}</div>
+          <div class="news-blurb">${blurb}</div>
         </div>`;
       })
       .join('');
@@ -3905,9 +3965,14 @@ function openComplaint(complaint) {
     .forEach((btn) => {
       btn.onclick = async () => {
         try {
-          const r = await api('POST', '/api/complaint/resolve', { choiceId: btn.dataset.choice });
+          const r = await api('POST', '/api/complaint/resolve', {
+            complaintId: complaint.id,
+            choiceId: btn.dataset.choice,
+          });
           setMe(r.user);
           toast(r.satisfied ? '선수가 만족했습니다. 헌신도가 상승했습니다.' : '선수의 반응이 미온적입니다.');
+          closeComplaint();
+          renderComplaintsList();
         } catch (err) {
           toast(err.message);
         }
@@ -3918,6 +3983,50 @@ function openComplaint(complaint) {
 
 function closeComplaint() {
   $('#complaint-overlay').classList.add('hidden');
+}
+
+// =====================================================================
+// 선수 불만 알림 목록 (여러 건 누적) 모달
+// =====================================================================
+
+function openComplaints() {
+  renderComplaintsList();
+  $('#complaints-overlay').classList.remove('hidden');
+}
+
+function closeComplaints() {
+  $('#complaints-overlay').classList.add('hidden');
+}
+
+function renderComplaintsList() {
+  const complaints = state.me.complaints || [];
+  const list = $('#complaints-list');
+  if (!complaints.length) {
+    list.innerHTML = '<p class="dim">쌓인 불만이 없습니다.</p>';
+    return;
+  }
+  list.innerHTML = complaints
+    .slice()
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .map((c) => {
+      const p = state.catalog.get(c.playerId);
+      return `
+      <div class="mail-item" data-id="${c.id}">
+        <div class="mail-body">
+          <div class="mail-msg">${p ? escapeHtml(p.name) + ' — ' : ''}${escapeHtml(c.prompt)}</div>
+          <div class="mail-date">${new Date(c.createdAt).toLocaleString()}</div>
+        </div>
+        <button type="button" class="btn small primary" data-talk>면담</button>
+      </div>`;
+    })
+    .join('');
+  list.querySelectorAll('[data-talk]').forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.closest('.mail-item').dataset.id;
+      const complaint = complaints.find((c) => c.id === id);
+      if (complaint) openComplaint(complaint);
+    };
+  });
 }
 
 // =====================================================================

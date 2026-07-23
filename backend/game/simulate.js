@@ -219,8 +219,8 @@ function tacticOf(squad) {
 
 // --- match simulation ------------------------------------------------------
 
-function scorerFor(ratings) {
-  const candidates = ratings.roster.filter((r) => r.slotLine !== 'GK');
+function scorerFor(ratings, excludeId) {
+  const candidates = ratings.roster.filter((r) => r.slotLine !== 'GK' && r.player.id !== excludeId);
   const r = pickWeighted(candidates, (c) => {
     const lineW = c.slotLine === 'ATT' ? 3.2 : c.slotLine === 'MID' ? 1.4 : 0.35;
     // role nudge: a shooting-heavy role (e.g. poacher) scores more than a
@@ -235,8 +235,10 @@ function scorerFor(ratings) {
 
 // Pick a teammate (excluding the scorer) to credit with the assist, weighted
 // toward playmaking attrs. Callers skip this entirely for penalties.
-function assistFor(ratings, scorerId) {
-  const candidates = ratings.roster.filter((r) => r.slotLine !== 'GK' && r.player.id !== scorerId);
+function assistFor(ratings, scorerId, excludeId) {
+  const candidates = ratings.roster.filter(
+    (r) => r.slotLine !== 'GK' && r.player.id !== scorerId && r.player.id !== excludeId
+  );
   const r = pickWeighted(candidates, (c) => {
     const lineW = c.slotLine === 'ATT' ? 2.4 : c.slotLine === 'MID' ? 3 : 0.5;
     const emphasis = ROLE_EMPHASIS[c.roleId];
@@ -244,15 +246,6 @@ function assistFor(ratings, scorerId) {
     return lineW * roleAssist * (c.player.attrs.passing + c.player.attrs.dribbling) / 2;
   });
   return r ? { id: r.player.id, name: r.player.name } : null;
-}
-
-function attackerName(ratings) {
-  // outfielders only — keepers don't take shots or pick up bookings here
-  const r = pickWeighted(
-    ratings.roster.filter((c) => c.slotLine !== 'GK'),
-    (c) => (c.slotLine === 'ATT' ? 3 : c.slotLine === 'MID' ? 2 : 0.4)
-  );
-  return r ? r.player.name : '선수';
 }
 
 function uniqueMinutes(n, from = 1) {
@@ -319,7 +312,12 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
       let type;
       let text;
       let via = null;
-      const who = attackerName(ratings);
+      const whoC = pickWeighted(
+        ratings.roster.filter((c) => c.slotLine !== 'GK'),
+        (c) => (c.slotLine === 'ATT' ? 3 : c.slotLine === 'MID' ? 2 : 0.4)
+      );
+      const who = whoC ? whoC.player.name : '선수';
+      const whoId = whoC ? whoC.player.id : null;
       if (roll < 0.26) {
         type = 'save';
         text = `${who}의 슈팅 — 골키퍼 선방!`;
@@ -358,7 +356,7 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
         type = 'card';
         text = `${who} 경고 (옐로카드)`;
       }
-      events.push({ minute, type, team: side, player: who, text, via });
+      events.push({ minute, type, team: side, player: who, playerId: whoId, text, via });
     });
   };
   addFlavor('home', home, away.GK, xgHome);
@@ -368,8 +366,12 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   // second yellow becomes a red (at most one per side). A sending-off tilts
   // the remaining expected goals: 10 men score less, concede more.
   const redAdj = { home: 1, away: 1 };
+  // Player actually sent off this match, if any (at most one per side here —
+  // used downstream so a dismissed player can no longer score/assist/appear
+  // in later events on the same side).
+  const dismissed = { home: null, away: null };
   {
-    const booked = { home: new Set(), away: new Set() };
+    const booked = { home: new Map(), away: new Map() }; // name -> id
     const redDone = { home: false, away: false };
     events
       .filter((e) => e.type === 'card')
@@ -381,6 +383,7 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
           e.red = true;
           e.text = text;
           redDone[side] = true;
+          dismissed[side] = { id: e.playerId, minute: e.minute };
           const rem = Math.max(0, 90 - e.minute) / 90;
           const opp = side === 'home' ? 'away' : 'home';
           redAdj[side] *= 1 - 0.35 * rem;
@@ -392,15 +395,17 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
           sendOff(`🟥 ${e.player} 퇴장! (심각한 반칙)`);
           return;
         }
-        const names = [...booked[side]];
-        // repeat-offender bias: a booked player keeps fouling sometimes
+        const names = [...booked[side].keys()];
+        // repeat-offender bias: a booked player keeps fouling sometimes —
+        // reassign both name and id together so they never drift apart
         if (names.length && !booked[side].has(e.player) && Math.random() < 0.35) {
           e.player = names[Math.floor(Math.random() * names.length)];
+          e.playerId = booked[side].get(e.player);
         }
         if (booked[side].has(e.player)) {
           sendOff(`🟥 ${e.player} 두 번째 경고 — 퇴장!`);
         } else {
-          booked[side].add(e.player);
+          booked[side].set(e.player, e.playerId);
           e.text = `${e.player} 경고 (옐로카드)`;
         }
       });
@@ -416,16 +421,25 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   const goalsHome = poisson(xgHomeAdj * frac);
   const goalsAway = poisson(xgAwayAdj * frac);
 
+  // A dismissed player can't be picked as scorer/assist/etc. for any event
+  // at or after their sending-off minute — they've left the pitch.
+  const excludeAt = (side, minute) => {
+    const d = dismissed[side];
+    return d && minute >= d.minute ? d.id : null;
+  };
+
   const addGoals = (count, side, ratings) => {
     uniqueMinutes(count, fromMinute + 1).forEach((minute) => {
       // set-piece share tuned to EPL rates: ~12% of goals are penalties,
       // ~6% direct free kicks; the rest are worked through open play
       const r = Math.random();
       const via = r < 0.12 ? 'penalty' : r < 0.18 ? 'freekick' : null;
-      const scorer = scorerFor(ratings);
+      const excludeId = excludeAt(side, minute);
+      const scorer = scorerFor(ratings, excludeId);
       // penalties are one-on-one — no assist; open play/free kicks usually
       // do (~75%), matching a Poisson-flavored "most goals are assisted" feel
-      const assist = via !== 'penalty' && Math.random() < 0.75 ? assistFor(ratings, scorer.id) : null;
+      const assist =
+        via !== 'penalty' && Math.random() < 0.75 ? assistFor(ratings, scorer.id, excludeId) : null;
       events.push({
         minute,
         type: 'goal',
@@ -453,7 +467,7 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     uniqueMinutes(n, fromMinute + 1)
       .filter((m) => !usedMinutes.has(m))
       .forEach((minute) => {
-        const scorer = scorerFor(ratings);
+        const scorer = scorerFor(ratings, excludeAt(side, minute));
         events.push({
           minute,
           type: 'disallowed',

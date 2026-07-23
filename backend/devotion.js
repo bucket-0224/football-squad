@@ -35,15 +35,19 @@ const ISSUES = [
 
 const CHECK_COOLDOWN_MS = 30 * 60 * 1000; // at most one roll per 30 real minutes
 const RAISE_CHANCE = 0.12;
+const MAX_PENDING = 5; // stop rolling new ones once this many are unread
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
 // Opportunistically roll a new complaint. Called on the frequently-polled
-// /api/me route instead of running a dedicated timer.
+// /api/me route instead of running a dedicated timer. Complaints stack (a
+// player raising one doesn't block another from doing the same) so the user
+// clears them individually from a notification list instead of a single
+// blocking popup.
 function maybeRaiseComplaint(user) {
-  if (user.complaint) return;
+  if (user.complaints.length >= MAX_PENDING) return;
   const now = Date.now();
   if (now - (user.lastComplaintCheck || 0) < CHECK_COOLDOWN_MS) return;
   user.lastComplaintCheck = now;
@@ -52,42 +56,48 @@ function maybeRaiseComplaint(user) {
   if (!starters.length) return;
   const playerId = starters[Math.floor(Math.random() * starters.length)];
   const issue = ISSUES[Math.floor(Math.random() * ISSUES.length)];
-  user.complaint = {
+  user.complaints.push({
     id: 'c' + Math.random().toString(36).slice(2, 10),
     playerId,
     issue: issue.id,
     createdAt: now,
-  };
+  });
 }
 
-// Client-facing view of a pending complaint — strips `satisfies`/
+// Client-facing view of pending complaints — strips `satisfies`/
 // `devotionDelta` so the "correct" answer can't be read off the response.
-function publicComplaint(user) {
-  if (!user.complaint) return null;
-  const issue = ISSUES.find((i) => i.id === user.complaint.issue);
-  if (!issue) return null;
-  return {
-    id: user.complaint.id,
-    playerId: user.complaint.playerId,
-    prompt: issue.prompt,
-    choices: issue.choices.map((c) => ({ id: c.id, label: c.label, costCoins: c.costCoins || 0 })),
-  };
+function publicComplaints(user) {
+  return user.complaints
+    .map((c) => {
+      const issue = ISSUES.find((i) => i.id === c.issue);
+      if (!issue) return null;
+      return {
+        id: c.id,
+        playerId: c.playerId,
+        createdAt: c.createdAt,
+        prompt: issue.prompt,
+        choices: issue.choices.map((ch) => ({ id: ch.id, label: ch.label, costCoins: ch.costCoins || 0 })),
+      };
+    })
+    .filter(Boolean);
 }
 
-function resolveComplaint(user, choiceId) {
-  if (!user.complaint) return { error: '해결할 불만이 없습니다.', status: 400 };
-  const issue = ISSUES.find((i) => i.id === user.complaint.issue);
+function resolveComplaint(user, complaintId, choiceId) {
+  const idx = user.complaints.findIndex((c) => c.id === complaintId);
+  if (idx === -1) return { error: '해결할 불만이 없습니다.', status: 400 };
+  const complaint = user.complaints[idx];
+  const issue = ISSUES.find((i) => i.id === complaint.issue);
   const choice = issue && issue.choices.find((c) => c.id === choiceId);
   if (!choice) return { error: '알 수 없는 선택지입니다.', status: 400 };
   if (choice.costCoins && user.coins < choice.costCoins) {
     return { error: `코인이 부족합니다. (필요: ${choice.costCoins})`, status: 400 };
   }
   if (choice.costCoins) user.coins -= choice.costCoins;
-  const playerId = user.complaint.playerId;
+  const playerId = complaint.playerId;
   const cur = user.devotion[playerId] != null ? user.devotion[playerId] : 60;
   user.devotion[playerId] = clamp(cur + choice.devotionDelta, 0, 100);
-  user.complaint = null;
+  user.complaints.splice(idx, 1);
   return { satisfied: !!choice.satisfies, devotion: user.devotion[playerId] };
 }
 
-module.exports = { maybeRaiseComplaint, publicComplaint, resolveComplaint };
+module.exports = { maybeRaiseComplaint, publicComplaints, resolveComplaint };

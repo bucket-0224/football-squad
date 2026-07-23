@@ -88,7 +88,8 @@ function normalizeUser(u) {
 
   if (!u.playerStats || typeof u.playerStats !== 'object') u.playerStats = {}; // id -> {goals, assists}
   if (!u.devotion || typeof u.devotion !== 'object') u.devotion = {}; // id -> 0..100 (헌신도)
-  if (u.complaint === undefined) u.complaint = null; // pending 선수 불만
+  if (!Array.isArray(u.complaints)) u.complaints = u.complaint ? [u.complaint] : []; // 여러 건 누적되는 pending 선수 불만
+  delete u.complaint;
   if (!u.lastComplaintCheck) u.lastComplaintCheck = 0;
   if (!Array.isArray(u.mailbox)) u.mailbox = []; // 관리자 보상 우편함
   return u;

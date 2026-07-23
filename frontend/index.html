@@ -44,6 +44,9 @@
         <button id="btn-mailbox" class="btn ghost small mailbox-btn">
           ✉️ <span id="mailbox-badge" class="mailbox-badge hidden">0</span>
         </button>
+        <button id="btn-complaints" class="btn ghost small mailbox-btn">
+          😠 <span id="complaints-badge" class="mailbox-badge hidden">0</span>
+        </button>
         <button id="btn-logout" class="btn ghost small">로그아웃</button>
       </div>
     </header>
@@ -51,12 +54,10 @@
     <nav id="main-tabs">
       <button data-tab="squad" class="active">스쿼드</button>
       <button data-tab="market">이적시장</button>
-      <button data-tab="buyout">바이아웃</button>
       <button data-tab="packs">뽑기</button>
       <button data-tab="match">대전</button>
       <button data-tab="predict">예측</button>
       <button data-tab="rank">랭킹 · 기록</button>
-      <button data-tab="team">팀 성적</button>
       <button data-tab="news">뉴스</button>
     </nav>
 
@@ -127,17 +128,9 @@
           <option value="ATT">공격수</option>
         </select>
         <label class="check-label"><input type="checkbox" id="market-enhanced"> 강화 카드만</label>
+        <label class="check-label"><input type="checkbox" id="market-buyout"> 바이아웃(FA)만</label>
       </div>
       <div id="market-list"></div>
-    </div>
-
-    <!-- 바이아웃 (FA 전용) -->
-    <div id="tab-buyout" class="tab-panel hidden">
-      <p class="dim small-text">구단이 없는 자유계약(FA) 선수 전용입니다. 1단계는 바이아웃 협상, 2단계는 개인 협상(계약 보너스)입니다.</p>
-      <div class="market-toolbar">
-        <input id="buyout-search" placeholder="선수 이름 검색">
-      </div>
-      <div id="buyout-list"></div>
     </div>
 
     <!-- 뽑기 -->
@@ -264,6 +257,7 @@
       <nav id="rank-subtabs" class="sub-tabs">
         <button data-subtab="board" class="active">전체 랭킹</button>
         <button data-subtab="top">득점왕 · 도움왕</button>
+        <button data-subtab="perf">팀 성적</button>
       </nav>
 
       <div id="rank-sub-board" class="rank-sub">
@@ -285,11 +279,10 @@
       <div id="rank-sub-top" class="rank-sub hidden">
         <div class="top-performers" id="top-performers"></div>
       </div>
-    </div>
 
-    <!-- 팀 성적 -->
-    <div id="tab-team" class="tab-panel hidden">
-      <div id="team-record"></div>
+      <div id="rank-sub-perf" class="rank-sub hidden">
+        <div id="team-record"></div>
+      </div>
     </div>
 
     <!-- 뉴스 -->
@@ -371,6 +364,7 @@
     <div class="nego-modal">
       <div class="picker-head">
         <span>😠 선수 면담</span>
+        <button type="button" id="btn-complaint-close" class="btn ghost small">닫기</button>
       </div>
       <div class="nego-body">
         <div id="complaint-card-col"></div>
@@ -390,7 +384,14 @@
         <button type="button" id="btn-oppo-close" class="btn ghost small">닫기</button>
       </div>
       <div id="oppo-info" class="dim small-text"></div>
-      <div id="oppo-list"></div>
+      <div id="oppo-pitch">
+        <div class="pitch-lines">
+          <div class="center-circle"></div>
+          <div class="halfway"></div>
+          <div class="box box-bottom"></div>
+          <div class="box box-top"></div>
+        </div>
+      </div>
       <button type="button" id="oppo-copy" class="btn primary small">📋 이 전략 복사 (포메이션·전술·유형)</button>
     </div>
   </div>
@@ -403,6 +404,17 @@
         <button type="button" id="btn-mail-close" class="btn ghost small">닫기</button>
       </div>
       <div id="mail-list"></div>
+    </div>
+  </div>
+
+  <!-- 선수 불만 알림 목록 모달 -->
+  <div id="complaints-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span>😠 선수 불만</span>
+        <button type="button" id="btn-complaints-close" class="btn ghost small">닫기</button>
+      </div>
+      <div id="complaints-list"></div>
     </div>
   </div>
 

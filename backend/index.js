@@ -105,7 +105,7 @@ function sanitizeUser(u) {
     upgrades: u.upgrades || {},
     playerStats: u.playerStats || {},
     devotion: u.devotion || {},
-    complaint: devotion.publicComplaint(u),
+    complaints: devotion.publicComplaints(u),
     mailbox: u.mailbox || [],
     squad: u.squad,
     pvpSquad: u.pvpSquad,
@@ -186,7 +186,7 @@ app.post('/api/register', async (req, res) => {
     upgrades: {},
     playerStats: {}, // id -> {goals, assists}
     devotion: {}, // id -> 0..100 (헌신도)
-    complaint: null,
+    complaints: [], // 여러 건 누적되는 pending 선수 불만
     lastComplaintCheck: 0,
     // start with the best XI already placed (fit-first, GK guaranteed)
     squad: {
@@ -550,8 +550,8 @@ app.post('/api/predictions/bet', auth.authMiddleware, (req, res) => {
 // ---- 선수 불만 / 헌신도 -------------------------------------------------------
 
 app.post('/api/complaint/resolve', auth.authMiddleware, (req, res) => {
-  const { choiceId } = req.body || {};
-  const r = devotion.resolveComplaint(req.user, choiceId);
+  const { complaintId, choiceId } = req.body || {};
+  const r = devotion.resolveComplaint(req.user, complaintId, choiceId);
   if (r.error) return bad(res, r.status, r.error);
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user), satisfied: r.satisfied, devotion: r.devotion });
