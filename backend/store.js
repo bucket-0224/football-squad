@@ -136,6 +136,11 @@ function matchesForUser(userId, limit = 20) {
     .slice(0, limit);
 }
 
+// Unfiltered, for the news feed — every match across every user.
+function recentMatches(limit = 30) {
+  return load().matches.slice(0, limit);
+}
+
 // ---- season --------------------------------------------------------------
 
 function getSeason() {
@@ -172,6 +177,7 @@ module.exports = {
   putUser,
   addMatch,
   matchesForUser,
+  recentMatches,
   bumpPlayerStat,
   getSeason,
   saveSeason,

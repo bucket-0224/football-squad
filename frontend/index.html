@@ -51,11 +51,13 @@
     <nav id="main-tabs">
       <button data-tab="squad" class="active">스쿼드</button>
       <button data-tab="market">이적시장</button>
+      <button data-tab="buyout">바이아웃</button>
       <button data-tab="packs">뽑기</button>
       <button data-tab="match">대전</button>
       <button data-tab="predict">예측</button>
       <button data-tab="rank">랭킹 · 기록</button>
       <button data-tab="team">팀 성적</button>
+      <button data-tab="news">뉴스</button>
     </nav>
 
     <!-- 스쿼드 -->
@@ -127,6 +129,15 @@
         <label class="check-label"><input type="checkbox" id="market-enhanced"> 강화 카드만</label>
       </div>
       <div id="market-list"></div>
+    </div>
+
+    <!-- 바이아웃 (FA 전용) -->
+    <div id="tab-buyout" class="tab-panel hidden">
+      <p class="dim small-text">구단이 없는 자유계약(FA) 선수 전용입니다. 1단계는 바이아웃 협상, 2단계는 개인 협상(계약 보너스)입니다.</p>
+      <div class="market-toolbar">
+        <input id="buyout-search" placeholder="선수 이름 검색">
+      </div>
+      <div id="buyout-list"></div>
     </div>
 
     <!-- 뽑기 -->
@@ -260,7 +271,7 @@
           <div>
             <h3>🏆 랭킹</h3>
             <table class="data-table" id="leaderboard-table">
-              <thead><tr><th>#</th><th>구단</th><th>승점</th><th>승-무-패</th><th>OVR</th></tr></thead>
+              <thead><tr><th>#</th><th>구단</th><th>승점</th><th>승-무-패</th><th>OVR</th><th></th></tr></thead>
               <tbody></tbody>
             </table>
           </div>
@@ -279,6 +290,11 @@
     <!-- 팀 성적 -->
     <div id="tab-team" class="tab-panel hidden">
       <div id="team-record"></div>
+    </div>
+
+    <!-- 뉴스 -->
+    <div id="tab-news" class="tab-panel hidden">
+      <div id="news-list"></div>
     </div>
   </section>
 
@@ -363,6 +379,19 @@
           <div id="complaint-choices"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 상대 스쿼드 보기 모달 -->
+  <div id="oppo-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span id="oppo-title">🔍 스쿼드 보기</span>
+        <button type="button" id="btn-oppo-close" class="btn ghost small">닫기</button>
+      </div>
+      <div id="oppo-info" class="dim small-text"></div>
+      <div id="oppo-list"></div>
+      <button type="button" id="oppo-copy" class="btn primary small">📋 이 전략 복사 (포메이션·전술·유형)</button>
     </div>
   </div>
 

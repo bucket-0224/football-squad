@@ -600,10 +600,37 @@ app.get('/api/season', (req, res) => {
   res.json({ season: season.getSeasonStatus(), history: store.getSeasonHistory() });
 });
 
+// ---- 뉴스 (최근 전체 유저 경기 결과) --------------------------------------------
+
+app.get('/api/news', (req, res) => {
+  res.json({ matches: store.recentMatches(30) });
+});
+
 // ---- records ---------------------------------------------------------------
 
 app.get('/api/matches', auth.authMiddleware, (req, res) => {
   res.json({ matches: store.matchesForUser(req.user.id, 20) });
+});
+
+// Read-only view of another user's squad — for the 랭킹 tab's "스쿼드 보기"
+// (scouting/copy-strategy). Never exposes account fields, only squad shape.
+app.get('/api/user/:username/squad', auth.authMiddleware, (req, res) => {
+  const target = store.findUserByName(req.params.username);
+  if (!target) return bad(res, 404, '존재하지 않는 유저입니다.');
+  const kind = req.query.kind === 'pvp' ? 'pvp' : 'main';
+  const squad = kind === 'pvp' ? target.pvpSquad : target.squad;
+  res.json({
+    username: target.username,
+    clubName: target.clubName,
+    formation: squad.formation,
+    tactic: squad.tactic || 'balanced',
+    roles: squad.roles || {},
+    starters: squad.starters,
+    starterDetails: squad.starters.map((id) => (id ? players.publicPlayer(id) : null)),
+    captain: squad.captain || null,
+    viceCaptain: squad.viceCaptain || null,
+    ratings: ratingSummary(withUpgrades(target, squad)),
+  });
 });
 
 app.get('/api/leaderboard', (req, res) => {

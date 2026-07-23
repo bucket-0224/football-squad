@@ -367,14 +367,16 @@ document.querySelectorAll('#main-tabs button').forEach((btn) => {
     }
     document.querySelectorAll('#main-tabs button').forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
-    ['squad', 'market', 'packs', 'match', 'predict', 'rank', 'team'].forEach((t) => {
+    ['squad', 'market', 'buyout', 'packs', 'match', 'predict', 'rank', 'team', 'news'].forEach((t) => {
       $('#tab-' + t).classList.toggle('hidden', t !== btn.dataset.tab);
     });
     if (btn.dataset.tab === 'squad') renderSquadTab();
     if (btn.dataset.tab === 'market') renderMarket();
+    if (btn.dataset.tab === 'buyout') renderBuyout();
     if (btn.dataset.tab === 'packs') renderPacks();
     if (btn.dataset.tab === 'rank') renderRank();
     if (btn.dataset.tab === 'team') renderTeamRecord();
+    if (btn.dataset.tab === 'news') renderNews();
     if (btn.dataset.tab === 'predict') startPredictPolling();
     else stopPredictPolling();
     if (btn.dataset.tab === 'match' && !state.inMatch) startSpectatePolling();
@@ -970,6 +972,39 @@ async function remoteFindPlayers(q) {
   }
 }
 
+function renderBuyout() {
+  const q = $('#buyout-search').value.trim().toLowerCase();
+  const list = $('#buyout-list');
+  const ownedSet = new Set(state.me ? state.me.owned : []);
+  list.innerHTML = '';
+
+  state.market
+    .filter((p) => !p.team && !p.youth)
+    .filter((p) => !q || p.name.toLowerCase().includes(q))
+    .forEach((p) => {
+      const owned = ownedSet.has(p.id);
+      const cell = document.createElement('div');
+      cell.className = 'card-cell';
+      cell.innerHTML = `
+        ${cardHTML(p, 'md', { stats: true, flag: 'FA' })}
+        <div class="cc-price">🪙 ${p.price.toLocaleString()}</div>
+        <div class="cc-actions">
+          ${owned
+            ? '<span class="starter-tag">보유중</span>'
+            : '<button class="btn small primary nego-btn">바이아웃 협상</button>'}
+        </div>`;
+      const negoBtn = cell.querySelector('.nego-btn');
+      if (negoBtn) negoBtn.onclick = () => openNegotiation(p);
+      list.appendChild(cell);
+    });
+
+  if (!list.children.length) {
+    list.innerHTML = '<p class="dim">조건에 맞는 FA 선수가 없습니다.</p>';
+  }
+}
+
+$('#buyout-search').oninput = () => renderBuyout();
+
 $('#market-search').oninput = () => {
   marketLimit = 60;
   renderMarket();
@@ -1012,16 +1047,23 @@ function renderNegoStage() {
     clubEl.classList.add('done');
     persEl.classList.add('active');
   }
-  clubEl.style.display = p.team ? '' : 'none';
-  document.querySelector('.nego-arrow').style.display = p.team ? '' : 'none';
+  // FA도 이제 1단계(바이아웃)부터 진행하므로 클럽 스테이지 표시는 항상 보이되,
+  // 상대가 구단이 아니라 선수 본인일 때는 라벨만 바이아웃으로 바꾼다.
+  clubEl.textContent = p.team ? '🏟 구단 합의' : '💰 바이아웃';
 
   const partyLogo =
-    st.stage === 'club' && p.teamLogo ? `<img src="${p.teamLogo}" alt="">` : '';
-  const partyName = st.stage === 'club' ? `${p.team} 구단` : `${p.name} 에이전트`;
+    st.stage === 'club' && p.team && p.teamLogo ? `<img src="${p.teamLogo}" alt="">` : '';
+  const partyName =
+    st.stage === 'club'
+      ? p.team
+        ? `${p.team} 구단`
+        : `${p.name} 측 (바이아웃)`
+      : `${p.name} 에이전트`;
   $('#nego-party').innerHTML = `${partyLogo}<span>${partyName}</span>`;
 
   const dots = '●'.repeat(st.attemptsLeft) + '○'.repeat(3 - st.attemptsLeft);
-  const feePart = st.fee ? ` · 합의된 이적료 🪙${st.fee.toLocaleString()}` : '';
+  const feeLabel = p.team ? '이적료' : '바이아웃';
+  const feePart = st.fee ? ` · 합의된 ${feeLabel} 🪙${st.fee.toLocaleString()}` : '';
   $('#nego-info').innerHTML =
     `시장 가치 🪙${st.marketValue.toLocaleString()}${feePart} · 남은 시도 <span class="attempts-dots">${dots}</span> · 보유 🪙${state.me.coins.toLocaleString()}`;
 }
@@ -2824,31 +2866,6 @@ function vizShoot(atk) {
   }
 }
 
-// Backlog escape hatch: a full scripted play (vizBeginEvent -> vizShoot) takes
-// several real seconds, but the server ticks a new minute every TICK_MS
-// (650ms). A slow device or a backgrounded/throttled tab (common on mobile,
-// e.g. switching apps mid-match) makes playback fall further behind every
-// frame, and since the clock/feed/event-banner only advance when an event is
-// actually dequeued, they drift later and later relative to the real match —
-// the server can even finish while the display is still on minute 1. Once
-// the backlog crosses this many queued events, skip the choreography and
-// resolve events immediately (feed + banner only) until it's back under
-// control, so what's on screen stays close to "now" instead of drifting.
-const CATCHUP_QUEUE_LEN = 5;
-
-function vizFastResolveEvent(e) {
-  addFeedItem(e.minute + "'", e.text, e.type);
-  if (e.type === 'goal') {
-    if (e.score) $('#sb-score').textContent = `${e.score.home} - ${e.score.away}`;
-    showEventBanner(`⚽ ${e.player} 골!${e.assist ? ` (도움: ${e.assist})` : ''}`, 'goal', 1200);
-  } else if (e.red) {
-    showEventBanner(`🟥 레드카드 — ${e.player}`, 'red', 1200);
-  } else if (e.type === 'card') {
-    showEventBanner(`🟨 옐로카드 — ${e.player}`, 'yellow', 1200);
-  }
-  if (e.team) viz.possession = e.team;
-}
-
 // One server tick = one match minute: nudge possession toward the expected split.
 function vizOnTick() {
   if (viz.script.length || viz.queue.length || viz.attack || viz.kickoff || viz.duel) return;
@@ -3011,8 +3028,7 @@ function vizFrame(ts) {
         },
       });
     } else if (viz.queue.length) {
-      if (viz.queue.length >= CATCHUP_QUEUE_LEN) vizFastResolveEvent(viz.queue.shift());
-      else vizBeginEvent(viz.queue.shift());
+      vizBeginEvent(viz.queue.shift());
     } else {
       viz.runner = null;
       if (viz.pendingResult && (!viz.flash || viz.now > viz.flash.until)) {
@@ -3094,9 +3110,22 @@ function vizFrame(ts) {
         // chasing an outcome: advance -> penetrate the box -> finish
         const gDist = Math.hypot(vizGoalX(side) - b.x, H / 2 - b.y);
         if (atk.e.via === 'freekick') {
-          // win the free kick within range; the set piece resolves it
-          if (gDist < 280 || atk.timeLeft <= 0) vizShoot(atk);
-          else {
+          // a direct free kick can never be given from inside the box (a
+          // box foul is always a penalty by rule) — mirrors the penalty
+          // branch below, just inverted: require gDist AND being outside
+          // vizInBox before staging the shot.
+          if (gDist < 280 && !vizInBox(side, b.x, b.y)) {
+            vizShoot(atk);
+          } else if (atk.timeLeft <= 0) {
+            // safety valve so a stuck build-up can't stall forever — snap
+            // the ball just outside the box first, same as the penalty
+            // valve does for "just inside", so the fallback can never
+            // resolve from inside the box or some arbitrary distance.
+            const dir2 = vizDir(side);
+            b.x = vizGoalX(side) - dir2 * (BOX_DEPTH + 30);
+            b.y = H / 2;
+            vizShoot(atk);
+          } else {
             viz.passTimer -= dt * 1.3 * atk.hurry;
             if (viz.passTimer <= 0) vizSchedulePass();
           }
@@ -3572,13 +3601,17 @@ async function renderRank() {
         (row, i) => `
         <tr${row.username === state.me.username ? ' style="color:var(--gold)"' : ''}>
           <td>${i + 1}</td>
-          <td>${row.clubName} <span class="dim small-text">(${row.username})</span></td>
+          <td>${escapeHtml(row.clubName)} <span class="dim small-text">(${escapeHtml(row.username)})</span></td>
           <td class="num">${row.points}</td>
           <td>${row.record.w}-${row.record.d}-${row.record.l}</td>
           <td>${row.ovr}</td>
+          <td>${row.username === state.me.username ? '' : `<button type="button" class="btn ghost small oppo-view-btn" data-username="${escapeHtml(row.username)}">🔍 스쿼드</button>`}</td>
         </tr>`
       )
       .join('');
+    tbody.querySelectorAll('.oppo-view-btn').forEach((btn) => {
+      btn.onclick = () => openOpponentSquad(btn.dataset.username);
+    });
 
     const hist = $('#history-list');
     if (!matches.length) {
@@ -3607,6 +3640,78 @@ async function renderRank() {
     toast(err.message);
   }
 }
+
+// =====================================================================
+// 상대 스쿼드 보기 / 전략 복사 (랭킹 탭)
+// =====================================================================
+
+let oppoView = null; // last-fetched opponent squad, kept for the copy button
+
+async function openOpponentSquad(username) {
+  try {
+    const view = await api('GET', `/api/user/${encodeURIComponent(username)}/squad`);
+    oppoView = view;
+    $('#oppo-title').textContent = `🔍 ${view.clubName} (${view.username}) 스쿼드`;
+    $('#oppo-info').textContent =
+      `${view.formation} · 전술: ${state.tactics[view.tactic] || view.tactic} · OVR ${view.ratings.OVR}`;
+    $('#oppo-list').innerHTML = view.starterDetails
+      .map((p, i) => {
+        if (!p) return '<div class="oppo-item"><span class="dim">(빈 슬롯)</span></div>';
+        const pid = view.starters[i];
+        const roleId = view.roles[pid];
+        const roleLabel = roleId && state.roles[roleId] ? state.roles[roleId].label : '';
+        const tag = pid === view.captain ? ' (C)' : pid === view.viceCaptain ? ' (VC)' : '';
+        return `
+        <div class="oppo-item">
+          <span>${escapeHtml(p.name)}${tag} <span class="dim small-text">${p.pos} · OVR ${p.ovr}</span></span>
+          ${roleLabel ? `<span class="oppo-role">${escapeHtml(roleLabel)}</span>` : ''}
+        </div>`;
+      })
+      .join('');
+    $('#oppo-overlay').classList.remove('hidden');
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+function closeOpponentSquad() {
+  $('#oppo-overlay').classList.add('hidden');
+  oppoView = null;
+}
+
+$('#btn-oppo-close').onclick = () => closeOpponentSquad();
+
+$('#oppo-copy').onclick = async () => {
+  if (!oppoView) return;
+  try {
+    // 1) switch to their formation/tactic, keeping my current starters by
+    // index where possible (same approach as the formation-select handler)
+    const slots = state.formations[oppoView.formation].length;
+    const curStarters = activeSquad().starters.slice(0, slots);
+    while (curStarters.length < slots) curStarters.push(null);
+    await saveSquad({ formation: oppoView.formation, starters: curStarters, tactic: oppoView.tactic });
+    // 2) auto-fill the best XI from MY OWN roster in that formation (their
+    // exact players usually aren't mine to place)
+    const { user } = await api('POST', '/api/squad/auto', { kind: state.squadMode });
+    setMe(user);
+    // 3) re-apply their per-slot player "type" (role) onto whoever now sits
+    // in that slot on my side, skipping roles that don't fit my player's pos
+    const mySquad = state.squadMode === 'pvp' ? user.pvpSquad : user.squad;
+    const roleBySlot = oppoView.starters.map((pid) => oppoView.roles[pid] || null);
+    const myRoles = {};
+    mySquad.starters.forEach((pid, i) => {
+      if (!pid || !roleBySlot[i]) return;
+      const p = state.catalog.get(pid);
+      const role = state.roles[roleBySlot[i]];
+      if (p && role && role.pos.includes(p.pos)) myRoles[pid] = roleBySlot[i];
+    });
+    await saveSquad({ roles: myRoles });
+    closeOpponentSquad();
+    toast('전략을 복사했습니다! (포메이션·전술·유형 — 보유 선수로 자동 배치)');
+  } catch (err) {
+    toast(err.message);
+  }
+};
 
 // ---- 득점왕 · 도움왕 (육각형 능력치 차트) ----
 
@@ -3746,6 +3851,36 @@ async function renderTeamRecord() {
           <p>${lastTop ? `${lastTop.clubName} <span class="dim small-text">(${lastTop.username})</span> — ${lastTop.points}점` : '<span class="dim">아직 종료된 시즌이 없습니다.</span>'}</p>
         </div>
       </div>`;
+  } catch (err) {
+    toast(err.message);
+  }
+}
+
+// =====================================================================
+// 뉴스 (전체 유저 최근 경기 결과)
+// =====================================================================
+
+async function renderNews() {
+  try {
+    const { matches } = await api('GET', '/api/news');
+    $('#news-list').innerHTML = matches
+      .map((m) => {
+        const winner = m.score.home === m.score.away ? null : m.score.home > m.score.away ? 'home' : 'away';
+        const home = escapeHtml(m.homeName);
+        const away = escapeHtml(m.awayName);
+        const teams =
+          winner === 'home'
+            ? `<b>${home}</b> ${m.score.home} - ${m.score.away} ${away}`
+            : winner === 'away'
+              ? `${home} ${m.score.home} - ${m.score.away} <b>${away}</b>`
+              : `${home} ${m.score.home} - ${m.score.away} ${away} (무승부)`;
+        return `
+        <div class="news-item">
+          <span class="news-teams">${teams}</span>
+          <span class="news-date">${new Date(m.at).toLocaleString()}</span>
+        </div>`;
+      })
+      .join('');
   } catch (err) {
     toast(err.message);
   }

@@ -7,12 +7,14 @@ const store = require('./store');
 // Transfer negotiations.
 //
 // Signing a player is a two-stage negotiation:
-//   1. 'club'     — agree a transfer fee with the owning club. The club has a
-//                   hidden asking price around the market value; lowball offers
-//                   burn attempts and harden its stance.
+//   1. 'club'     — agree a fee. For a club-owned player this is with the
+//                   owning club; for a free agent there's no club to
+//                   negotiate with, so this becomes a "buyout" negotiated
+//                   directly with the player over their own valuation —
+//                   same hidden-asking-price/counter-offer/attempt-limit
+//                   mechanics either way, only the framing/labels differ.
 //   2. 'personal' — agree personal terms (signing bonus) with the player.
-// Free agents skip the club stage. Coins are only deducted when the contract
-// is signed (fee + bonus together).
+// Coins are only deducted when the contract is signed (fee + bonus together).
 //
 // Negotiations are in-memory, one per user at a time.
 // ---------------------------------------------------------------------------
@@ -51,8 +53,8 @@ function start(user, playerId) {
 
   const neg = {
     playerId,
-    stage: p.team ? 'club' : 'personal',
-    fee: p.team ? null : 0, // FA는 이적료 없음
+    stage: 'club', // FA도 1단계(바이아웃)부터 시작 — 상대가 구단이 아니라 선수 본인일 뿐
+    fee: null,
     bonus: null,
     counter: null,
     // hidden targets
@@ -62,10 +64,9 @@ function start(user, playerId) {
   };
   negotiations.set(user.id, neg);
 
-  const opening =
-    neg.stage === 'club'
-      ? `${p.team} 구단이 협상 테이블에 나왔습니다. 이적료를 제시하세요.`
-      : `${p.name} 선수는 자유계약(FA) 신분입니다. 바로 개인 협상(계약 보너스)을 진행하세요.`;
+  const opening = p.team
+    ? `${p.team} 구단이 협상 테이블에 나왔습니다. 이적료를 제시하세요.`
+    : `${p.name} 선수는 자유계약(FA) 신분입니다. 구단이 없어 바이아웃 금액을 직접 제시해야 합니다.`;
   return { negotiation: publicView(neg), message: opening };
 }
 
@@ -90,7 +91,9 @@ function offer(user, amount) {
   }
 
   const target = neg.stage === 'club' ? neg.clubAsk : neg.bonusDemand;
-  const who = neg.stage === 'club' ? `${p.team} 구단` : `${p.name} 측`;
+  const who =
+    neg.stage === 'club' ? (p.team ? `${p.team} 구단` : `${p.name} 측 (바이아웃)`) : `${p.name} 측`;
+  const feeLabel = p.team ? '이적료' : '바이아웃';
 
   // Accept
   if (amount >= target) {
@@ -101,7 +104,7 @@ function offer(user, amount) {
       return {
         negotiation: publicView(neg),
         result: 'accepted',
-        message: `${who}과(와) 이적료 🪙${amount.toLocaleString()}에 합의했습니다! 이제 선수 개인 협상입니다.`,
+        message: `${who}과(와) ${feeLabel} 🪙${amount.toLocaleString()}에 합의했습니다! 이제 선수 개인 협상입니다.`,
       };
     }
     // personal accepted -> sign
@@ -121,7 +124,7 @@ function offer(user, amount) {
       total,
       fee: neg.fee,
       bonus: neg.bonus,
-      message: `🎉 ${p.name} 영입 완료! (이적료 🪙${neg.fee.toLocaleString()} + 보너스 🪙${neg.bonus.toLocaleString()})`,
+      message: `🎉 ${p.name} 영입 완료! (${feeLabel} 🪙${neg.fee.toLocaleString()} + 보너스 🪙${neg.bonus.toLocaleString()})`,
     };
   }
 

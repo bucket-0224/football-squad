@@ -88,6 +88,31 @@ const ROLE_DEFS = {
   ballPlayingCB: { label: '볼 플레잉 센터백', pos: ['CB'], score: (a) => a.defending * 0.4 + a.passing * 0.3 + a.physical * 0.18 + a.pace * 0.12 },
 };
 
+// shooting/passing coefficients hand-copied from each ROLE_DEFS entry's score
+// formula above, for scorerFor/assistFor to nudge WHO scores/assists by role
+// (computeRatings's OVR path doesn't need these — it already calls
+// role.score() directly). Keep in sync with ROLE_DEFS if a formula changes.
+// GK has no roles (goalkeeping isn't role-differentiated) and is filtered
+// out of both scorerFor/assistFor anyway, so it's omitted here.
+const ROLE_EMPHASIS = {
+  poacher: { shooting: 0.4, passing: 0 },
+  target: { shooting: 0.32, passing: 0.1 },
+  deepForward: { shooting: 0.28, passing: 0.28 },
+  winger: { shooting: 0.4, passing: 0 },
+  invertedWinger: { shooting: 0.34, passing: 0.26 },
+  playmaker: { shooting: 0, passing: 0.33 },
+  shadowStriker: { shooting: 0.32, passing: 0.18 },
+  box2box: { shooting: 0, passing: 0.33 },
+  deepLyingPM: { shooting: 0, passing: 0.42 },
+  anchor: { shooting: 0, passing: 0.33 },
+  ballPlayingMid: { shooting: 0, passing: 0.38 },
+  fullback: { shooting: 0, passing: 0.1 },
+  wingback: { shooting: 0, passing: 0.18 },
+  invertedFullback: { shooting: 0, passing: 0.34 },
+  stopper: { shooting: 0, passing: 0.1 },
+  ballPlayingCB: { shooting: 0, passing: 0.3 },
+};
+
 // Only apply a role if it's actually valid for the card's real position —
 // stale role assignments after a position swap silently fall back to the
 // slot's default line formula instead of producing nonsense ratings.
@@ -95,6 +120,17 @@ function roleAwareScore(player, slotLine, roleId) {
   const role = roleId && ROLE_DEFS[roleId];
   if (role && role.pos.includes(player.pos)) return role.score(player.attrs);
   return roleScore(player.attrs, slotLine);
+}
+
+// The role id an unassigned/invalid-role player effectively plays as — the
+// position's isDefault entry, so "no role" reads the same ROLE_EMPHASIS
+// nudge as explicitly picking the default (matching roleAwareScore's own
+// "unassigned behaves identically to the default role" contract above,
+// which scorerFor/assistFor need too instead of silently falling back to a
+// flat no-bonus multiplier for every unassigned player).
+function defaultRoleIdFor(pos) {
+  const found = Object.entries(ROLE_DEFS).find(([, r]) => r.isDefault && r.pos.includes(pos));
+  return found ? found[0] : null;
 }
 
 // --- ratings ---------------------------------------------------------------
@@ -136,9 +172,12 @@ function computeRatings(squad) {
     let mult = chem * devotionFactor(devotionMap ? devotionMap[id] : null);
     if (captainId && id === captainId) mult *= 1.05;
     else if (viceCaptainId && id === viceCaptainId) mult *= 1.025;
-    const score = roleAwareScore(p, slotLine, roleMap ? roleMap[id] : null) * mult;
+    const roleId = roleMap ? roleMap[id] : null;
+    const role = roleId && ROLE_DEFS[roleId];
+    const effectiveRoleId = role && role.pos.includes(p.pos) ? roleId : defaultRoleIdFor(p.pos);
+    const score = roleAwareScore(p, slotLine, roleId) * mult;
     lines[slotLine].push(score);
-    roster.push({ player: p, slotPos, slotLine, chem, score });
+    roster.push({ player: p, slotPos, slotLine, chem, score, roleId: effectiveRoleId });
   });
 
   const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 40);
@@ -184,7 +223,12 @@ function scorerFor(ratings) {
   const candidates = ratings.roster.filter((r) => r.slotLine !== 'GK');
   const r = pickWeighted(candidates, (c) => {
     const lineW = c.slotLine === 'ATT' ? 3.2 : c.slotLine === 'MID' ? 1.4 : 0.35;
-    return lineW * (c.player.attrs.shooting + c.player.ovr) / 2;
+    // role nudge: a shooting-heavy role (e.g. poacher) scores more than a
+    // passing-heavy one in the same line/position, on top of the existing
+    // shooting+ovr baseline — clamped so a future role can't blow it up.
+    const emphasis = ROLE_EMPHASIS[c.roleId];
+    const roleShoot = Math.min(1.5, 1 + (emphasis ? emphasis.shooting : 0));
+    return lineW * roleShoot * (c.player.attrs.shooting + c.player.ovr) / 2;
   });
   return r ? { id: r.player.id, name: r.player.name } : { id: null, name: '알 수 없는 선수' };
 }
@@ -195,7 +239,9 @@ function assistFor(ratings, scorerId) {
   const candidates = ratings.roster.filter((r) => r.slotLine !== 'GK' && r.player.id !== scorerId);
   const r = pickWeighted(candidates, (c) => {
     const lineW = c.slotLine === 'ATT' ? 2.4 : c.slotLine === 'MID' ? 3 : 0.5;
-    return lineW * (c.player.attrs.passing + c.player.attrs.dribbling) / 2;
+    const emphasis = ROLE_EMPHASIS[c.roleId];
+    const roleAssist = Math.min(1.5, 1 + (emphasis ? emphasis.passing : 0));
+    return lineW * roleAssist * (c.player.attrs.passing + c.player.attrs.dribbling) / 2;
   });
   return r ? { id: r.player.id, name: r.player.name } : null;
 }
