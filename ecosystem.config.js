@@ -12,6 +12,10 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
         PORT: 3000,
+        // Pass through from the shell that runs `pm2 startOrReload ... --update-env`
+        // (deploy.sh) — set the actual secret in /etc/environment on the EC2
+        // host, never commit a real value here.
+        ADMIN_KEY: process.env.ADMIN_KEY,
       },
     },
     {
