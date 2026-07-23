@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>풋볼 스쿼드</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ===== 로그인 / 회원가입 ===== -->
+  <section id="view-auth" class="view hidden">
+    <div class="auth-card">
+      <h1>⚽ 풋볼 스쿼드</h1>
+      <p class="tagline">나만의 스쿼드를 만들어 실시간 대전에서 승리하세요</p>
+      <div class="auth-tabs">
+        <button type="button" id="tab-login" class="active">로그인</button>
+        <button type="button" id="tab-register">회원가입</button>
+      </div>
+      <form id="auth-form" autocomplete="off">
+        <input id="auth-username" placeholder="아이디 (2~16자)" maxlength="16">
+        <input id="auth-password" type="password" placeholder="비밀번호 (4자 이상)">
+        <div id="register-extra" class="hidden">
+          <input id="auth-clubname" placeholder="구단 이름 (예: 동현 FC)" maxlength="20">
+          <div class="pick-label">시작 팀 선택 <span class="pick-hint">— 선택한 팀 선수단(14명)으로 시작합니다</span></div>
+          <select id="league-select" class="league-select"></select>
+          <div id="team-grid"></div>
+        </div>
+        <button type="submit" id="auth-submit" class="btn primary">로그인</button>
+        <div id="auth-error" class="error-msg"></div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===== 메인 ===== -->
+  <section id="view-main" class="view hidden">
+    <header id="topbar">
+      <div class="club-info">
+        <span id="hdr-club" class="club-name"></span>
+        <span id="hdr-ovr" class="chip ovr-chip"></span>
+      </div>
+      <div class="hdr-right">
+        <span class="chip coin-chip">🪙 <span id="hdr-coins">0</span></span>
+        <span class="chip point-chip">🏆 승점 <span id="hdr-points">0</span></span>
+        <button id="btn-mailbox" class="btn ghost small mailbox-btn">
+          ✉️ <span id="mailbox-badge" class="mailbox-badge hidden">0</span>
+        </button>
+        <button id="btn-complaints" class="btn ghost small mailbox-btn">
+          😠 <span id="complaints-badge" class="mailbox-badge hidden">0</span>
+        </button>
+        <button id="btn-logout" class="btn ghost small">로그아웃</button>
+      </div>
+    </header>
+
+    <nav id="main-tabs">
+      <button data-tab="squad" class="active">스쿼드</button>
+      <button data-tab="market">이적시장</button>
+      <button data-tab="packs">뽑기</button>
+      <button data-tab="match">대전</button>
+      <button data-tab="predict">예측</button>
+      <button data-tab="rank">랭킹 · 기록</button>
+      <button data-tab="news">뉴스</button>
+    </nav>
+
+    <!-- 스쿼드 -->
+    <div id="tab-squad" class="tab-panel">
+      <div id="squad-mode">
+        <button id="mode-main" class="active">클럽 스쿼드</button>
+        <button id="mode-pvp">실전 스쿼드 <span class="mode-hint">뽑은 카드 전용</span></button>
+        <button id="btn-club-change" class="club-change-btn">🔄 클럽 변경 <span class="mode-hint">승점 50</span></button>
+      </div>
+      <p id="pvp-note" class="dim small-text hidden">랭크 매치에 사용됩니다. 뽑기로 획득한 카드만 배치할 수 있고, 빈 슬롯은 최소 능력치 선수로 채워집니다.</p>
+      <div class="squad-layout">
+        <div class="pitch-col">
+          <div class="pitch-toolbar">
+            <select id="formation-select"></select>
+            <select id="tactic-select" title="전술"></select>
+            <button id="btn-auto" class="btn small">자동배치</button>
+          </div>
+          <div class="pitch-toolbar captain-toolbar">
+            <span class="dim small-text">주장</span>
+            <select id="captain-select"></select>
+            <span class="dim small-text">부주장</span>
+            <select id="vice-select"></select>
+          </div>
+          <div id="pitch">
+            <div class="pitch-lines">
+              <div class="center-circle"></div>
+              <div class="halfway"></div>
+              <div class="box box-bottom"></div>
+              <div class="box box-top"></div>
+            </div>
+          </div>
+          <div id="ratings-bar"></div>
+          <div id="role-picker" class="role-picker"></div>
+        </div>
+        <div class="owned-col">
+          <h3>보유 선수 <span id="owned-count" class="dim"></span></h3>
+          <div class="owned-controls">
+            <input id="owned-search" type="search" placeholder="선수 검색">
+            <select id="owned-line">
+              <option value="">전체</option>
+              <option value="GK">GK</option>
+              <option value="DEF">수비</option>
+              <option value="MID">미드필더</option>
+              <option value="ATT">공격</option>
+            </select>
+            <select id="owned-sort">
+              <option value="ovr">OVR순</option>
+              <option value="pos">포지션순</option>
+              <option value="name">이름순</option>
+              <option value="price">가치순</option>
+            </select>
+          </div>
+          <div id="owned-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 이적시장 -->
+    <div id="tab-market" class="tab-panel hidden">
+      <div class="market-toolbar">
+        <input id="market-search" placeholder="선수 이름 검색">
+        <select id="market-line">
+          <option value="">전체 포지션</option>
+          <option value="GK">GK</option>
+          <option value="DEF">수비수</option>
+          <option value="MID">미드필더</option>
+          <option value="ATT">공격수</option>
+        </select>
+        <label class="check-label"><input type="checkbox" id="market-enhanced"> 강화 카드만</label>
+        <label class="check-label"><input type="checkbox" id="market-buyout"> 바이아웃(FA)만</label>
+      </div>
+      <div id="market-list"></div>
+    </div>
+
+    <!-- 뽑기 -->
+    <div id="tab-packs" class="tab-panel hidden">
+      <div class="packs-intro dim">팩을 열어 무작위 선수를 영입하세요. 이미 보유한 선수가 나오면 판매가(55%)만큼 코인으로 전환됩니다.</div>
+      <div id="pack-shelf"></div>
+      <div id="pack-reveal" class="hidden">
+        <div id="pack-ceremony" class="hidden">
+          <div id="cere-sparks"></div>
+          <div class="cere-items">
+            <span id="cere-flag" class="cere-item"></span>
+            <span id="cere-pos" class="cere-item"></span>
+            <img id="cere-club" class="cere-item" alt="">
+          </div>
+          <div class="cere-label dim">워크아웃 진행 중…</div>
+        </div>
+        <div id="pack-card-wrap"></div>
+        <div id="pack-rest"></div>
+        <div id="pack-result-text"></div>
+        <div class="pack-reveal-actions">
+          <button id="btn-pack-again" class="btn primary">한 번 더!</button>
+          <button id="btn-pack-close" class="btn ghost">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 대전 -->
+    <div id="tab-match" class="tab-panel hidden">
+      <div id="match-lobby">
+        <div class="lobby-card">
+          <h2>⚔️ 실시간 대전</h2>
+          <p class="dim">경기는 스탯 기반으로 시뮬레이션되며, 90분이 탑뷰 실시간 중계로 재생됩니다.</p>
+          <div class="lobby-buttons">
+            <button id="btn-queue" class="btn primary big">랭크 매치 (유저 대전)</button>
+            <p class="dim small-text">랭크 매치는 <b>실전 스쿼드</b>(뽑기로 획득한 카드)로 진행됩니다.</p>
+            <button id="btn-queue-ai" class="btn big">클럽팀 상대 연습 경기 (AI)</button>
+            <p class="dim small-text">연습 경기는 클럽 스쿼드로 진행되며, 상대는 무작위 클럽팀입니다.</p>
+          </div>
+          <div id="queue-status" class="hidden">
+            <div class="spinner"></div>
+            <span>상대를 찾는 중...</span>
+            <button id="btn-cancel-queue" class="btn ghost small">취소</button>
+          </div>
+          <div id="match-error" class="error-msg"></div>
+        </div>
+        <div class="lobby-card spectate-card">
+          <h2>👀 관전</h2>
+          <p class="dim small-text">진행 중인 다른 경기를 실시간으로 지켜볼 수 있습니다.</p>
+          <div id="spectate-list"><p class="dim small-text">진행 중인 경기가 없습니다.</p></div>
+        </div>
+      </div>
+
+      <div id="match-live" class="hidden">
+        <div class="scoreboard">
+          <div class="sb-team home">
+            <div id="sb-home-name" class="sb-name"></div>
+            <div id="sb-home-ovr" class="sb-ovr dim"></div>
+          </div>
+          <div class="sb-center">
+            <div id="sb-score">0 - 0</div>
+            <div id="sb-minute" class="sb-minute">0'</div>
+          </div>
+          <div class="sb-team away">
+            <div id="sb-away-name" class="sb-name"></div>
+            <div id="sb-away-ovr" class="sb-ovr dim"></div>
+          </div>
+        </div>
+        <div class="pause-bar">
+          <button id="btn-pause" class="btn small">⏸ 작전 타임 (<span id="pause-left">2</span>)</button>
+          <span id="pause-status" class="dim small-text"></span>
+        </div>
+        <div id="spectate-bar" class="pause-bar hidden">
+          <span class="spec-tag">👀 관전 중</span>
+          <button id="btn-spectate-leave" class="btn small">관전 종료</button>
+        </div>
+        <div class="match-stage">
+        <div class="pitch-wrap">
+          <canvas id="pitch2d" width="520" height="860"></canvas>
+          <div id="event-banner"></div>
+        </div>
+        <div id="pause-panel" class="disabled">
+          <div class="pp-head">
+            <b>⏸ 작전 타임</b>
+            <span class="dim small-text">포지션을 바꾸거나 선수를 교체하세요 — 남은 경기가 새 스쿼드로 진행됩니다</span>
+          </div>
+          <div class="pp-row">
+            <label class="dim small-text">포메이션</label>
+            <select id="pp-formation"></select>
+            <button id="pp-apply" class="btn small primary">변경 적용</button>
+            <button id="pp-resume" class="btn small">▶ 경기 재개</button>
+          </div>
+          <div class="pp-cols">
+            <div>
+              <h4 class="pp-h">선발 XI <span class="dim small-text">(두 명을 눌러 자리 교체)</span></h4>
+              <div id="pp-xi"></div>
+            </div>
+            <div>
+              <h4 class="pp-h">벤치 <span class="dim small-text">(선발 선택 후 눌러 교체 투입 · 경기당 5명)</span></h4>
+              <div id="pp-bench"></div>
+            </div>
+          </div>
+        </div>
+        </div>
+        <div class="poss-wrap">
+          <span class="dim small-text">점유율</span>
+          <div class="poss-bar"><div id="poss-home" class="poss-home"></div></div>
+          <div class="poss-nums"><span id="poss-home-num"></span><span id="poss-away-num"></span></div>
+        </div>
+        <div id="match-feed"></div>
+      </div>
+    </div>
+
+    <!-- 예측 -->
+    <div id="tab-predict" class="tab-panel hidden">
+      <div class="packs-intro dim">실제 리그 경기의 결과를 예측하고 코인을 받으세요 — 정확한 스코어 <b>200~350</b>(스코어가 화끈할수록 보너스) · 무승부 적중 <b>160</b> · 승/패 적중 <b>100</b> · 참여 <b>50</b> 코인. 킥오프 전까지 예측 가능하며 실제 경기 종료 후 자동 정산됩니다.</div>
+      <h3 class="predict-h">예정 · 진행 중인 경기 <button id="btn-predict-refresh" class="btn ghost small">🔄 새로고침</button></h3>
+      <div id="predict-list"></div>
+      <h3 class="predict-h">지난 경기 결과</h3>
+      <div id="predict-last" class="dim"></div>
+    </div>
+
+    <!-- 랭킹 · 기록 -->
+    <div id="tab-rank" class="tab-panel hidden">
+      <nav id="rank-subtabs" class="sub-tabs">
+        <button data-subtab="board" class="active">전체 랭킹</button>
+        <button data-subtab="top">득점왕 · 도움왕</button>
+        <button data-subtab="perf">팀 성적</button>
+      </nav>
+
+      <div id="rank-sub-board" class="rank-sub">
+        <div class="rank-layout">
+          <div>
+            <h3>🏆 랭킹</h3>
+            <table class="data-table" id="leaderboard-table">
+              <thead><tr><th>#</th><th>구단</th><th>승점</th><th>승-무-패</th><th>OVR</th><th></th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div>
+            <h3>📋 최근 경기</h3>
+            <div id="history-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="rank-sub-top" class="rank-sub hidden">
+        <div class="top-performers" id="top-performers"></div>
+      </div>
+
+      <div id="rank-sub-perf" class="rank-sub hidden">
+        <div id="team-record"></div>
+      </div>
+    </div>
+
+    <!-- 뉴스 -->
+    <div id="tab-news" class="tab-panel hidden">
+      <div id="news-list"></div>
+    </div>
+  </section>
+
+  <!-- 경기 결과 오버레이 -->
+  <div id="result-overlay" class="hidden">
+    <div class="result-modal">
+      <div id="result-banner"></div>
+      <div id="result-score"></div>
+      <div id="result-detail" class="dim"></div>
+      <button id="btn-back-lobby" class="btn primary">로비로 돌아가기</button>
+    </div>
+  </div>
+
+  <!-- 클럽 변경 모달 -->
+  <div id="club-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span>클럽 변경 <span class="mode-hint">승점 50 차감 · 기존 클럽 선수단은 떠납니다 (뽑은 카드는 유지)</span></span>
+        <button id="club-close" class="btn ghost small">✕</button>
+      </div>
+      <select id="club-league-select" class="league-select"></select>
+      <div id="club-grid"></div>
+    </div>
+  </div>
+
+  <!-- 이적 협상 모달 -->
+  <div id="nego-overlay" class="hidden">
+    <div class="nego-modal">
+      <div class="picker-head">
+        <span>이적 협상</span>
+        <button id="nego-close" class="btn ghost small">✕</button>
+      </div>
+      <div class="nego-body">
+        <div id="nego-card-col"></div>
+        <div class="nego-main">
+          <div id="nego-stagebar">
+            <span id="nego-stage-club" class="nego-stage">🏟 구단 합의</span>
+            <span class="nego-arrow">→</span>
+            <span id="nego-stage-personal" class="nego-stage">🤝 개인 합의</span>
+          </div>
+          <div id="nego-party"></div>
+          <div id="nego-log"></div>
+          <div class="nego-offer-row">
+            <input id="nego-amount" type="number" min="0" step="10" placeholder="제시 금액">
+            <button id="nego-offer" class="btn primary">제시</button>
+          </div>
+          <div id="nego-info" class="dim small-text"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 선수 강화 모달 -->
+  <div id="enh-overlay" class="hidden">
+    <div class="nego-modal enh-modal">
+      <div class="picker-head">
+        <span>⚡ 선수 강화 <span class="mode-hint">단계당 OVR·능력치 +1 · 실패해도 단계는 유지</span></span>
+        <button id="enh-close" class="btn ghost small">✕</button>
+      </div>
+      <div class="nego-body">
+        <div id="enh-card"></div>
+        <div class="nego-main">
+          <div id="enh-level"></div>
+          <div id="enh-next" class="small-text"></div>
+          <div id="enh-log"></div>
+          <button id="enh-try" class="btn primary">⚡ 강화 시도</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 선수 불만 모달 -->
+  <div id="complaint-overlay" class="hidden">
+    <div class="nego-modal">
+      <div class="picker-head">
+        <span>😠 선수 면담</span>
+        <button type="button" id="btn-complaint-close" class="btn ghost small">닫기</button>
+      </div>
+      <div class="nego-body">
+        <div id="complaint-card-col"></div>
+        <div class="nego-main">
+          <div id="complaint-prompt"></div>
+          <div id="complaint-choices"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 상대 스쿼드 보기 모달 -->
+  <div id="oppo-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span id="oppo-title">🔍 스쿼드 보기</span>
+        <button type="button" id="btn-oppo-close" class="btn ghost small">닫기</button>
+      </div>
+      <div id="oppo-info" class="dim small-text"></div>
+      <div id="oppo-pitch">
+        <div class="pitch-lines">
+          <div class="center-circle"></div>
+          <div class="halfway"></div>
+          <div class="box box-bottom"></div>
+          <div class="box box-top"></div>
+        </div>
+      </div>
+      <button type="button" id="oppo-copy" class="btn primary small">📋 이 전략 복사 (포메이션·전술·유형)</button>
+    </div>
+  </div>
+
+  <!-- 우편함 모달 -->
+  <div id="mail-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span>✉️ 우편함</span>
+        <button type="button" id="btn-mail-close" class="btn ghost small">닫기</button>
+      </div>
+      <div id="mail-list"></div>
+    </div>
+  </div>
+
+  <!-- 선수 불만 알림 목록 모달 -->
+  <div id="complaints-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span>😠 선수 불만</span>
+        <button type="button" id="btn-complaints-close" class="btn ghost small">닫기</button>
+      </div>
+      <div id="complaints-list"></div>
+    </div>
+  </div>
+
+  <!-- 선수 선택 모달 -->
+  <div id="picker-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span id="picker-title"></span>
+        <button id="picker-close" class="btn ghost small">✕</button>
+      </div>
+      <button id="picker-clear" class="btn ghost small">슬롯 비우기</button>
+      <div id="picker-list"></div>
+    </div>
+  </div>
+
+  <div id="toast" class="hidden"></div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

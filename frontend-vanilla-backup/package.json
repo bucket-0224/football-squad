@@ -1,0 +1,12 @@
+{
+  "name": "football-squad-frontend",
+  "version": "1.0.0",
+  "description": "Football squad game frontend (static client, vanilla JS).",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

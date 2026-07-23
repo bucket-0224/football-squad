@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const players = require('../backend/data/players');
 
-const OUT_DIR = path.join(__dirname, '..', 'frontend', 'img', 'players');
+const OUT_DIR = path.join(__dirname, '..', 'frontend', 'public', 'img', 'players');
 const FORCE = process.argv.includes('--force');
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0';
 const FOOTY_DELAY_MS = 700;

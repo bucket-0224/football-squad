@@ -27,7 +27,7 @@ import sys
 from PIL import Image
 
 IMG_DIR = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
-    os.path.dirname(__file__), "..", "frontend", "img", "players"
+    os.path.dirname(__file__), "..", "frontend", "public", "img", "players"
 )
 
 FULL_BODY_RATIO = 1.45  # subject taller than this counts as full body

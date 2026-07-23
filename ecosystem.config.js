@@ -21,7 +21,9 @@ module.exports = {
     {
       name: 'football-squad-frontend',
       cwd: __dirname + '/frontend',
-      script: 'server.js',
+      // .cjs, not .js: frontend/package.json is "type": "module" (for the
+      // Vite/React source), but this static server is plain CommonJS.
+      script: 'server.cjs',
       env: {
         NODE_ENV: 'production',
         PORT: 8080,

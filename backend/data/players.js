@@ -463,8 +463,13 @@ function imageSlug(name) {
     .replace(/^-+|-+$/g, '');
 }
 
-const IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'img', 'players');
-const TEAM_IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'img', 'teams');
+// The React frontend serves its static image assets from public/, which
+// Vite strips from the URL (public/img/x.png -> served at /img/x.png) but
+// NOT from the filesystem path — the files on disk are still under
+// frontend/public/img, one level deeper than the vanilla frontend's
+// frontend/img.
+const IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'public', 'img', 'players');
+const TEAM_IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'public', 'img', 'teams');
 const imgMeta = new Map(); // slug -> { exists, v } (v = mtime, checked once per slug per process)
 
 // frontend/server.js caches .png responses for 30 days as immutable, so

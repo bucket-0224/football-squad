@@ -13,6 +13,11 @@ cd backend
 npm ci --omit=dev
 cd ..
 
+cd frontend
+npm ci
+npm run build
+cd ..
+
 command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
 pm2 startOrReload ecosystem.config.js --update-env
