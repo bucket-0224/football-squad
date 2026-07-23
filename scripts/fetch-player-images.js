@@ -159,6 +159,12 @@ const IMAGE_OVERRIDES = {
   'Goncalo Inacio': 'https://r2.thesportsdb.com/images/media/player/cutout/m00erp1762291029.png',
   // newest Gakpo render is an arm-in-the-air pose that crops badly
   'Cody Gakpo': 'https://www.footyrenders.com/render/cody-gakpo-7.png',
+  // neither footyrenders nor the name-search TSDB/sofifa/fotmob lookups below
+  // resolve these two (Eusebio's plain-name search collides with an unrelated
+  // active player; Baresi has no footyrenders page) — verified TSDB ids
+  // (Eusébio 34168257, Franco Baresi 34167230) plugged in directly instead.
+  'Eusebio (Icon)': 'https://r2.thesportsdb.com/images/media/player/cutout/07nrh61594070570.png',
+  'Franco Baresi (Icon)': 'https://r2.thesportsdb.com/images/media/player/thumb/zvrjkx1558781898.jpg',
 };
 
 // Direct TheSportsDB player ids where search can't find them.

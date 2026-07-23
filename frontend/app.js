@@ -343,9 +343,15 @@ function renderHeader() {
   $('#hdr-ovr').textContent = 'OVR ' + me.ratings.OVR;
   $('#hdr-coins').textContent = me.coins.toLocaleString();
   $('#hdr-points').textContent = me.points;
+  const unclaimed = (me.mailbox || []).filter((m) => !m.claimed).length;
+  const badge = $('#mailbox-badge');
+  badge.textContent = unclaimed;
+  badge.classList.toggle('hidden', unclaimed === 0);
 }
 
 $('#btn-logout').onclick = () => logout();
+$('#btn-mailbox').onclick = () => openMailbox();
+$('#btn-mail-close').onclick = () => closeMailbox();
 
 document.querySelectorAll('#main-tabs button').forEach((btn) => {
   btn.onclick = () => {
@@ -2818,6 +2824,31 @@ function vizShoot(atk) {
   }
 }
 
+// Backlog escape hatch: a full scripted play (vizBeginEvent -> vizShoot) takes
+// several real seconds, but the server ticks a new minute every TICK_MS
+// (650ms). A slow device or a backgrounded/throttled tab (common on mobile,
+// e.g. switching apps mid-match) makes playback fall further behind every
+// frame, and since the clock/feed/event-banner only advance when an event is
+// actually dequeued, they drift later and later relative to the real match —
+// the server can even finish while the display is still on minute 1. Once
+// the backlog crosses this many queued events, skip the choreography and
+// resolve events immediately (feed + banner only) until it's back under
+// control, so what's on screen stays close to "now" instead of drifting.
+const CATCHUP_QUEUE_LEN = 5;
+
+function vizFastResolveEvent(e) {
+  addFeedItem(e.minute + "'", e.text, e.type);
+  if (e.type === 'goal') {
+    if (e.score) $('#sb-score').textContent = `${e.score.home} - ${e.score.away}`;
+    showEventBanner(`⚽ ${e.player} 골!${e.assist ? ` (도움: ${e.assist})` : ''}`, 'goal', 1200);
+  } else if (e.red) {
+    showEventBanner(`🟥 레드카드 — ${e.player}`, 'red', 1200);
+  } else if (e.type === 'card') {
+    showEventBanner(`🟨 옐로카드 — ${e.player}`, 'yellow', 1200);
+  }
+  if (e.team) viz.possession = e.team;
+}
+
 // One server tick = one match minute: nudge possession toward the expected split.
 function vizOnTick() {
   if (viz.script.length || viz.queue.length || viz.attack || viz.kickoff || viz.duel) return;
@@ -2980,7 +3011,8 @@ function vizFrame(ts) {
         },
       });
     } else if (viz.queue.length) {
-      vizBeginEvent(viz.queue.shift());
+      if (viz.queue.length >= CATCHUP_QUEUE_LEN) vizFastResolveEvent(viz.queue.shift());
+      else vizBeginEvent(viz.queue.shift());
     } else {
       viz.runner = null;
       if (viz.pendingResult && (!viz.flash || viz.now > viz.flash.until)) {
@@ -3751,6 +3783,59 @@ function openComplaint(complaint) {
 
 function closeComplaint() {
   $('#complaint-overlay').classList.add('hidden');
+}
+
+// =====================================================================
+// 우편함 (mailbox) 모달
+// =====================================================================
+
+function openMailbox() {
+  renderMailList();
+  $('#mail-overlay').classList.remove('hidden');
+}
+
+function closeMailbox() {
+  $('#mail-overlay').classList.add('hidden');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function renderMailList() {
+  const mail = (state.me.mailbox || []).slice().sort((a, b) => b.createdAt - a.createdAt);
+  $('#mail-list').innerHTML = mail
+    .map(
+      (m) => `
+      <div class="mail-item ${m.claimed ? 'claimed' : ''}" data-id="${m.id}">
+        <div class="mail-body">
+          ${m.coins ? `<div class="mail-coins">🪙 ${m.coins.toLocaleString()}</div>` : ''}
+          ${m.message ? `<div class="mail-msg">${escapeHtml(m.message)}</div>` : ''}
+          <div class="mail-date">${new Date(m.createdAt).toLocaleString()}</div>
+        </div>
+        ${
+          m.claimed
+            ? '<span class="dim small-text">수령완료</span>'
+            : '<button type="button" class="btn small primary" data-claim>수령</button>'
+        }
+      </div>`
+    )
+    .join('');
+  $('#mail-list')
+    .querySelectorAll('[data-claim]')
+    .forEach((btn) => {
+      btn.onclick = async () => {
+        const mailId = btn.closest('.mail-item').dataset.id;
+        try {
+          const r = await api('POST', '/api/mailbox/claim', { mailId });
+          setMe(r.user);
+          renderMailList();
+          toast('우편을 수령했습니다.');
+        } catch (err) {
+          toast(err.message);
+        }
+      };
+    });
 }
 
 // =====================================================================

@@ -15,6 +15,7 @@ const predictions = require('./predictions');
 const dynteams = require('./data/dynteams');
 const season = require('./season');
 const devotion = require('./devotion');
+const mailbox = require('./mailbox');
 
 // rebuild dynamically fetched clubs so persisted player ids keep resolving,
 // then fill in team badges + re-fetch pre-v2 rosters in the background
@@ -105,6 +106,7 @@ function sanitizeUser(u) {
     playerStats: u.playerStats || {},
     devotion: u.devotion || {},
     complaint: devotion.publicComplaint(u),
+    mailbox: u.mailbox || [],
     squad: u.squad,
     pvpSquad: u.pvpSquad,
     ratings: ratingSummary(withUpgrades(u, u.squad)),
@@ -553,6 +555,43 @@ app.post('/api/complaint/resolve', auth.authMiddleware, (req, res) => {
   if (r.error) return bad(res, r.status, r.error);
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user), satisfied: r.satisfied, devotion: r.devotion });
+});
+
+// ---- 우편함 ------------------------------------------------------------------
+
+app.post('/api/mailbox/claim', auth.authMiddleware, (req, res) => {
+  const { mailId } = req.body || {};
+  const r = mailbox.claimMail(req.user, mailId);
+  if (r.error) return bad(res, r.status, r.error);
+  store.putUser(req.user);
+  res.json({ user: sanitizeUser(req.user) });
+});
+
+function timingSafeEqual(a, b) {
+  const ab = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
+
+// Admin-only: grant a reward mail to a user by username. Protected by the
+// ADMIN_KEY env var (unset = endpoint disabled). No admin UI yet — call
+// with curl, e.g.:
+//   curl -X POST $API_BASE/api/admin/mail -H "x-admin-key: $ADMIN_KEY" \
+//     -H "Content-Type: application/json" \
+//     -d '{"username":"lover938","coins":5000,"message":"보상입니다"}'
+app.post('/api/admin/mail', (req, res) => {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) return bad(res, 503, '관리자 기능이 비활성화되어 있습니다 (ADMIN_KEY 미설정).');
+  const provided = req.headers['x-admin-key'];
+  if (!provided || !timingSafeEqual(provided, adminKey)) {
+    return bad(res, 401, '관리자 인증 실패.');
+  }
+  const { username, coins, message } = req.body || {};
+  const user = username && store.findUserByName(String(username).trim());
+  if (!user) return bad(res, 404, '존재하지 않는 유저입니다.');
+  const mail = mailbox.sendMail(user, { coins, message });
+  store.putUser(user);
+  res.json({ ok: true, mail });
 });
 
 // ---- 시즌 --------------------------------------------------------------------

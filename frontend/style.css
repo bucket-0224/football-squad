@@ -419,7 +419,13 @@ input:focus, select:focus { border-color: var(--blue); }
   display: flex; gap: 14px; align-items: flex-start; justify-content: center;
   margin-bottom: 12px;
 }
-.match-stage #pitch2d { margin: 0; }
+/* keep horizontal centering (margin:auto) — only the bottom gap is redundant
+   here since .match-stage already spaces itself via `gap`/margin-bottom.
+   A bare `margin:0` previously killed the auto centering too, which was
+   invisible on desktop (.pitch-wrap there shrinks to the canvas's own width)
+   but left the canvas pinned to the left edge once mobile's `align-items:
+   stretch` makes .pitch-wrap wider than the canvas. */
+.match-stage #pitch2d { margin: 0 auto; }
 .pitch-wrap { position: relative; }
 
 /* FM 스타일 이벤트 배너: 전술판 위에 겹쳐지는 한 줄 토스트.
@@ -533,7 +539,27 @@ input:focus, select:focus { border-color: var(--blue); }
 .h-outcome.draw { color: var(--blue); }
 
 /* ===== picker / club-change modals ===== */
-#picker-overlay, #club-overlay {
+/* ===== 우편함 ===== */
+.mailbox-btn { position: relative; }
+.mailbox-badge {
+  position: absolute; top: -6px; right: -6px;
+  background: var(--red); color: #fff; border-radius: 999px;
+  font-size: 10px; font-weight: 800; line-height: 1;
+  padding: 3px 5px; min-width: 14px; text-align: center;
+}
+#mail-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.mail-item {
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;
+}
+.mail-item .mail-body { min-width: 0; }
+.mail-item .mail-coins { font-weight: 800; color: var(--gold); }
+.mail-item .mail-msg { font-size: 13px; color: var(--dim); margin-top: 2px; }
+.mail-item .mail-date { font-size: 11px; color: var(--dim); margin-top: 4px; }
+.mail-item.claimed { opacity: .55; }
+#mail-list:empty::after { content: '받은 우편이 없습니다.'; color: var(--dim); font-size: 13px; }
+
+#picker-overlay, #club-overlay, #mail-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px;
 }

@@ -41,6 +41,9 @@
       <div class="hdr-right">
         <span class="chip coin-chip">🪙 <span id="hdr-coins">0</span></span>
         <span class="chip point-chip">🏆 승점 <span id="hdr-points">0</span></span>
+        <button id="btn-mailbox" class="btn ghost small mailbox-btn">
+          ✉️ <span id="mailbox-badge" class="mailbox-badge hidden">0</span>
+        </button>
         <button id="btn-logout" class="btn ghost small">로그아웃</button>
       </div>
     </header>
@@ -360,6 +363,17 @@
           <div id="complaint-choices"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 우편함 모달 -->
+  <div id="mail-overlay" class="hidden">
+    <div class="picker-modal">
+      <div class="picker-head">
+        <span>✉️ 우편함</span>
+        <button type="button" id="btn-mail-close" class="btn ghost small">닫기</button>
+      </div>
+      <div id="mail-list"></div>
     </div>
   </div>
 
