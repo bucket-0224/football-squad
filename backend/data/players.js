@@ -638,7 +638,7 @@ function publicPlayer(id) {
 
 const ENHANCE = {
   maxLevel: 5,
-  rates: [1, 0.8, 0.6, 0.4, 0.25], // success chance of reaching level 1..5
+  rates: [0.75, 0.6, 0.45, 0.3, 0.15], // success chance of reaching level 1..5
   costRate: 0.15, // attempt cost ≈ price * costRate * target level
 };
 

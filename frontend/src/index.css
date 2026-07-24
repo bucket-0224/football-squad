@@ -455,15 +455,17 @@ input:focus, select:focus { border-color: var(--blue); }
 /* 팩 5연속 & 멀티 공개 */
 .pk-actions { display: flex; gap: 6px; margin-top: 8px; }
 #pack-card-wrap.multi {
-  display: flex; flex-wrap: nowrap; gap: 10px; justify-content: center;
-  overflow-x: auto; padding-bottom: 6px;
-  /* 5장 나열: 컨테이너 고정폭(170px)을 풀고 카드마다 제 비율 유지 */
-  width: auto; max-width: 100%;
+  /* flex+overflow-x:auto centered overflowing content clips both edges
+     equally instead of showing full cards — a fixed 5-column grid always
+     fits the modal's own width, so cards shrink instead of clipping. */
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+  width: 100%; max-width: 100%;
 }
-#pack-card-wrap.multi .fut-card { width: 118px; flex-shrink: 0; }
-#pack-rest { display: flex; flex-wrap: nowrap; gap: 10px; justify-content: center; overflow-x: auto; margin-top: 10px; }
-/* 워크아웃일 때 아래 줄 카드는 메인보다 살짝만 작게 */
-#pack-rest .fut-card { width: 96px; flex-shrink: 0; }
+#pack-card-wrap.multi .fut-card { width: 100%; }
+#pack-rest {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px;
+}
+#pack-rest .fut-card { width: 100%; }
 #pack-rest:empty { display: none; }
 
 /* 80+ 워크아웃 세리머니 */
@@ -725,7 +727,7 @@ input:focus, select:focus { border-color: var(--blue); }
   /* collapsing to a single column stretches the card column's flex/grid
      item to the full modal width otherwise — cap and center it so the
      card stays a normal size instead of ballooning on phones */
-  #nego-card-col, #complaint-card-col, #transfer-request-card-col, #detail-card-col {
+  #nego-card-col, #complaint-card-col, #transfer-request-card-col, #detail-card-col, #enh-card {
     width: 120px; margin: 0 auto;
   }
 }
