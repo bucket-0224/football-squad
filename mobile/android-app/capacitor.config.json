@@ -1,0 +1,13 @@
+{
+  "appId": "com.footballsquad.app",
+  "appName": "풋볼 스쿼드",
+  "webDir": "www",
+  "backgroundColor": "#0d1117",
+  "server": {
+    "url": "http://ec2-3-27-169-144.ap-southeast-2.compute.amazonaws.com:8080/",
+    "cleartext": true
+  },
+  "android": {
+    "backgroundColor": "#0d1117"
+  }
+}
