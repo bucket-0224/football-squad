@@ -18,9 +18,11 @@ const SORTERS: Record<SortKey, (a: CatalogPlayer, b: CatalogPlayer) => number> =
 export default function OwnedList({
   onEnhance,
   onDetail,
+  onDragStart,
 }: {
   onEnhance: (playerId: string) => void;
   onDetail: (playerId: string) => void;
+  onDragStart: (playerId: string, card: CatalogPlayer, x: number, y: number) => void;
 }) {
   const { me, squadMode, catalog, sellPlayer } = useAppStore();
   const [q, setQ] = useState('');
@@ -95,7 +97,9 @@ export default function OwnedList({
             const lvl = upLevel(me, p.id);
             return (
               <div className="card-cell" key={p.id}>
-                <PlayerCard player={p} size="sm" flag={isStarter ? '선발' : undefined} />
+                <div className="card-drag-handle" onPointerDown={(e) => onDragStart(p.id, p, e.clientX, e.clientY)}>
+                  <PlayerCard player={p} size="sm" flag={isStarter ? '선발' : undefined} />
+                </div>
                 <div className="cc-actions">
                   <button type="button" className="btn ghost small" onClick={() => onDetail(p.id)}>
                     ⓘ 상세

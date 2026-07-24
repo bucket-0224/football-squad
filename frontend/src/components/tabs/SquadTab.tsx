@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
 import { activeRatings, activeSquad, convertedCard, upgradedCard } from '../../game/cards';
@@ -10,6 +10,11 @@ import EnhanceModal from '../EnhanceModal';
 import ClubChangeModal from '../ClubChangeModal';
 import PlayerDetailModal from '../PlayerDetailModal';
 import type { CatalogPlayer, Ratings, Role, Squad } from '../../types';
+
+// 드래그 시작 후 이 거리(px)를 넘게 움직여야 "드래그"로 인정한다 — 그 전까지는
+// 일반 클릭(선수 정보 열기 등)과 구분이 안 되므로, pointerdown~pointerup 사이
+// 이동량이 이 값 미만이면 클릭으로 취급해 기존 클릭 동작을 그대로 둔다.
+const DRAG_THRESHOLD_PX = 8;
 
 function RatingsBar({ ratings }: { ratings: Ratings }) {
   const cells: [string, string | number, string?][] = [
@@ -105,12 +110,27 @@ function captainOptions(squad: Squad, catalog: Map<string, CatalogPlayer>, exclu
     .filter((p): p is CatalogPlayer => !!p);
 }
 
+interface DragGhost {
+  playerId: string;
+  card: CatalogPlayer;
+  x: number;
+  y: number;
+}
+
 export default function SquadTab() {
   const { me, squadMode, setSquadMode, bootstrap, catalog, saveSquad, autoPlaceSquad } = useAppStore();
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
   const [enhanceId, setEnhanceId] = useState<string | null>(null);
   const [clubChangeOpen, setClubChangeOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
+  const [ghost, setGhost] = useState<DragGhost | null>(null);
+  const [dropSlot, setDropSlot] = useState<number | null>(null);
+
+  // pointerdown~pointerup 사이의 진행 중 드래그 정보. React state가 아니라
+  // ref인 이유: pointermove마다 리렌더할 필요 없이 ghost(state)로만 반영하고,
+  // "지금 드래그 중인지"는 클릭 억제 판단(justDraggedRef)에도 즉시 필요해서다.
+  const dragRef = useRef<{ playerId: string; card: CatalogPlayer; startX: number; startY: number; moved: boolean } | null>(null);
+  const justDraggedRef = useRef(false);
 
   if (!me || !bootstrap) return null;
 
@@ -118,6 +138,70 @@ export default function SquadTab() {
   const ratings = activeRatings(me, squadMode);
   const slots = bootstrap.formations[squad.formation] || [];
   const coords = COORDS[squad.formation] || COORDS['4-3-3'];
+
+  // 픽커 모달(PickerModal.assign)과 동일한 배치/스왑 로직 — 대상 슬롯에 이미
+  // 있는 다른 슬롯의 선수를 드래그해 놓으면 자동으로 두 자리가 맞바뀐다.
+  const assignToSlot = async (playerId: string, targetSlot: number) => {
+    const starters = [...squad.starters];
+    const existing = starters.indexOf(playerId);
+    if (existing === targetSlot) return;
+    if (existing >= 0) starters[existing] = starters[targetSlot];
+    starters[targetSlot] = playerId;
+    try {
+      await saveSquad({ starters });
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const beginDrag = (playerId: string, card: CatalogPlayer, x: number, y: number) => {
+    dragRef.current = { playerId, card, startX: x, startY: y, moved: false };
+  };
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const d = dragRef.current;
+      if (!d) return;
+      if (!d.moved) {
+        const dist = Math.hypot(e.clientX - d.startX, e.clientY - d.startY);
+        if (dist < DRAG_THRESHOLD_PX) return;
+        d.moved = true;
+      }
+      setGhost({ playerId: d.playerId, card: d.card, x: e.clientX, y: e.clientY });
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const slotEl = el && (el as HTMLElement).closest<HTMLElement>('[data-slot]');
+      setDropSlot(slotEl ? Number(slotEl.dataset.slot) : null);
+    };
+    const onUp = (e: PointerEvent) => {
+      const d = dragRef.current;
+      dragRef.current = null;
+      if (d && d.moved) {
+        justDraggedRef.current = true;
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const slotEl = el && (el as HTMLElement).closest<HTMLElement>('[data-slot]');
+        if (slotEl) assignToSlot(d.playerId, Number(slotEl.dataset.slot));
+      }
+      setGhost(null);
+      setDropSlot(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    return () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [squad.starters]);
+
+  // 드래그 직후 이어지는 합성 click을 삼켜서, 슬롯을 드래그로 옮긴 뒤에
+  // 곧바로 픽커 모달이 열리는 걸 막는다.
+  const guardClick = (fn: () => void) => () => {
+    if (justDraggedRef.current) {
+      justDraggedRef.current = false;
+      return;
+    }
+    fn();
+  };
 
   const onFormationChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const formation = e.target.value;
@@ -244,8 +328,18 @@ export default function SquadTab() {
               const badge = id && id === squad.captain ? 'C' : id && id === squad.viceCaptain ? 'VC' : undefined;
               const [x, y] = coords[i] || [50, 50];
               return (
-                <div key={i} className="slot" style={{ left: x + '%', bottom: y + '%' }}>
-                  <button type="button" className="slot-assign" onClick={() => setPickerSlot(i)}>
+                <div
+                  key={i}
+                  className={'slot' + (ghost ? ' drop-target' : '') + (dropSlot === i ? ' drop-hover' : '')}
+                  data-slot={i}
+                  style={{ left: x + '%', bottom: y + '%' }}
+                >
+                  <button
+                    type="button"
+                    className="slot-assign"
+                    onClick={guardClick(() => setPickerSlot(i))}
+                    onPointerDown={(e) => p && beginDrag(p.id, p, e.clientX, e.clientY)}
+                  >
                     {p ? <PlayerCard player={convertedCard(p, pos)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
                   </button>
                   {p && (
@@ -253,10 +347,7 @@ export default function SquadTab() {
                       type="button"
                       className="slot-info"
                       title="선수 정보"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDetailId(p.id);
-                      }}
+                      onClick={guardClick(() => setDetailId(p.id))}
                     >
                       ⓘ
                     </button>
@@ -268,7 +359,7 @@ export default function SquadTab() {
           <RatingsBar ratings={ratings} />
           <RolePicker squad={squad} catalog={catalog} roles={bootstrap.roles} />
         </div>
-        <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} />
+        <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} onDragStart={beginDrag} />
       </div>
       {pickerSlot !== null && (
         <PickerModal slotIndex={pickerSlot} pos={slots[pickerSlot]} onClose={() => setPickerSlot(null)} />
@@ -276,6 +367,11 @@ export default function SquadTab() {
       {enhanceId && <EnhanceModal playerId={enhanceId} onClose={() => setEnhanceId(null)} />}
       {clubChangeOpen && <ClubChangeModal onClose={() => setClubChangeOpen(false)} />}
       {detailId && <PlayerDetailModal playerId={detailId} onClose={() => setDetailId(null)} />}
+      {ghost && (
+        <div className="drag-ghost" style={{ left: ghost.x, top: ghost.y }}>
+          <PlayerCard player={ghost.card} size="xs" />
+        </div>
+      )}
     </div>
   );
 }

@@ -224,11 +224,25 @@ input:focus, select:focus { border-color: var(--blue); }
 
 .slot {
   position: absolute; transform: translate(-50%, 20%);
+  border-radius: 10px; transition: box-shadow .12s, background .12s;
 }
 .slot-assign {
   display: block; background: none; border: none; padding: 0; color: inherit; cursor: pointer; width: 100%;
+  touch-action: none; /* 드래그 제스처 중 모바일 스크롤이 가로채지 않도록 */
 }
 .slot:hover .fut-card { filter: brightness(1.12); }
+/* 드래그 중: 놓을 수 있는 슬롯 전체를 은은하게, 지금 포인터가 올라간
+   슬롯은 더 뚜렷하게 표시 — 놓기 전에 결과를 미리 알 수 있게 한다 */
+.slot.drop-target { box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
+.slot.drop-hover { box-shadow: 0 0 0 2px var(--green); background: rgba(46,160,67,.18); }
+
+/* 드래그 중 포인터를 따라다니는 카드 미리보기 — elementFromPoint로 놓을
+   위치를 판단해야 하므로 pointer-events는 반드시 꺼둔다 */
+.drag-ghost {
+  position: fixed; z-index: 200; width: 64px; pointer-events: none;
+  transform: translate(-50%, -50%) rotate(-4deg); opacity: .92;
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,.5));
+}
 .slot-info {
   position: absolute; top: -4px; right: -4px; z-index: 5;
   width: 18px; height: 18px; border-radius: 50%; padding: 0 0 1px 0.5px;
@@ -340,6 +354,8 @@ input:focus, select:focus { border-color: var(--blue); }
 
 /* card + actions cell used in grids */
 .card-cell { display: flex; flex-direction: column; gap: 6px; }
+.card-drag-handle { cursor: grab; touch-action: none; }
+.card-drag-handle:active { cursor: grabbing; }
 /* 강화/판매 버튼이 한 줄에서 서로 공간을 다투며 텍스트가 잘리던 문제 —
    세로로 쌓아 각 버튼이 전체 폭을 쓰도록 함 */
 .card-cell .cc-actions { display: flex; flex-direction: column; gap: 6px; }
