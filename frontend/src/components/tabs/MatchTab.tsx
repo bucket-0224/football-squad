@@ -16,19 +16,25 @@ interface SpectateRow {
   display: string;
 }
 
-interface FeedLine {
-  id: number;
-  minute: string;
-  text: string;
-  type: string;
-}
-
-let feedSeq = 0;
-
 const RESULT_LABELS: Record<'win' | 'loss' | 'draw', string> = {
   win: '🎉 승리!',
   loss: '😢 패배',
   draw: '🤝 무승부',
+};
+
+// 채팅 목록 대신 단일 라인 토스트(이벤트 배너)로 매 이벤트를 흘려보낸다 —
+// 타입별로 색을 다르게 줘서 계속 바뀌는 느낌을 준다. 골/레드카드/옐로카드/
+// 오프사이드/부상/태업처럼 이미 자체 색상으로 onBanner를 직접 호출하는
+// 이벤트는 이 매핑을 거치지 않고 그 색이 그대로 우선한다.
+const FEED_KIND: Record<string, string> = {
+  save: 'save',
+  miss: 'miss',
+  corner: 'corner',
+  foul: 'foul',
+  throwin: 'throwin',
+  card: 'yellow',
+  phase: 'phase',
+  live: 'info',
 };
 
 function LiveMatchCanvas({ engine }: { engine: LiveMatchEngine }) {
@@ -57,7 +63,6 @@ export default function MatchTab({ visible }: { visible: boolean }) {
   const [minuteLabel, setMinuteLabel] = useState("0'");
   const [score, setScore] = useState({ home: 0, away: 0 });
   const [possHomePct, setPossHomePct] = useState(50);
-  const [feed, setFeed] = useState<FeedLine[]>([]);
   const [banner, setBanner] = useState<{ text: string; kind: string; token: number } | null>(null);
   const [pausesLeft, setPausesLeft] = useState(2);
   const [pauseDisabled, setPauseDisabled] = useState(false);
@@ -70,9 +75,15 @@ export default function MatchTab({ visible }: { visible: boolean }) {
   const [poolKind, setPoolKind] = useState<'owned' | 'drawn'>('owned');
   const [pauseSel, setPauseSel] = useState<number | null>(null);
 
-  const feedRef = useRef<HTMLDivElement>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const matchTacticNamesRef = useRef({ home: '', away: '' });
+
+  const showBanner = (text: string, kind: string, ms?: number) => {
+    if (!text) return;
+    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
+    setBanner({ text, kind, token: Date.now() });
+    bannerTimerRef.current = setTimeout(() => setBanner(null), ms || 2200);
+  };
 
   const engineRef = useRef<LiveMatchEngine | null>(null);
   if (!engineRef.current) {
@@ -80,23 +91,13 @@ export default function MatchTab({ visible }: { visible: boolean }) {
       onMinute: (label) => setMinuteLabel(label),
       onScore: (h, a) => setScore({ home: h, away: a }),
       onPossession: (homePct) => setPossHomePct(homePct),
-      onFeedItem: (minute, text, type) => {
-        feedSeq++;
-        setFeed((f) => [...f, { id: feedSeq, minute, text, type }]);
-      },
-      onBanner: (text, kind, ms) => {
-        if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
-        setBanner({ text, kind, token: Date.now() });
-        bannerTimerRef.current = setTimeout(() => setBanner(null), ms || 2600);
-      },
+      // 채팅 목록 대신 매 이벤트를 단일 라인 토스트로 흘려보낸다 (타입별 색상)
+      onFeedItem: (minute, text, type) => showBanner((minute ? minute + ' ' : '') + text, FEED_KIND[type] || 'info'),
+      onBanner: (text, kind, ms) => showBanner(text, kind, ms),
       onResult: (msg) => handleResult(msg),
     });
   }
   const engine = engineRef.current;
-
-  useEffect(() => {
-    if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
-  }, [feed]);
 
   // ---- WS message dispatch (mirrors handleWsMessage) ----
   useEffect(() => {
@@ -190,20 +191,9 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           engine.updateSide('away', awayMsg.ratings.formation, awayMsg.players);
           if (side === mySide) {
             toast('스쿼드 변경 적용! 남은 경기가 새 전력으로 진행됩니다.');
-            engine.onEvent({
-              minute: 0,
-              type: 'phase',
-              team: 'home',
-              text: `🔁 ${side === 'home' ? '홈' : '원정'} 팀 스쿼드 변경`,
-            });
-            feedSeq++;
-            setFeed((f) => [
-              ...f,
-              { id: feedSeq, minute: '', text: `🔁 ${side === 'home' ? '홈' : '원정'} 팀 스쿼드 변경`, type: 'phase' },
-            ]);
+            showBanner(`🔁 ${side === 'home' ? '홈' : '원정'} 팀 스쿼드 변경`, 'phase');
           } else {
-            feedSeq++;
-            setFeed((f) => [...f, { id: feedSeq, minute: '', text: '🔁 상대 팀이 스쿼드를 변경했습니다', type: 'phase' }]);
+            showBanner('🔁 상대 팀이 스쿼드를 변경했습니다', 'phase');
           }
           break;
         }
@@ -257,7 +247,6 @@ export default function MatchTab({ visible }: { visible: boolean }) {
     setQueued(false);
     setView('live');
     setResultMsg(null);
-    setFeed([]);
     setPausesLeft(2);
     setPauseDisabled(false);
     setPauseStatus('');
@@ -282,11 +271,10 @@ export default function MatchTab({ visible }: { visible: boolean }) {
 
     engine.start(msg as MatchStartMsg);
 
-    feedSeq++;
     if (msg.spectate) {
-      setFeed([{ id: feedSeq, minute: '', text: `👀 관전 시작 — ${msg.home.name} vs ${msg.away.name} (${msg.display || "0'"})`, type: 'phase' }]);
+      showBanner(`👀 관전 시작 — ${msg.home.name} vs ${msg.away.name} (${msg.display || "0'"})`, 'phase');
     } else {
-      setFeed([{ id: feedSeq, minute: '', text: `📣 경기 시작! ${msg.home.name} vs ${msg.away.name}`, type: 'phase' }]);
+      showBanner(`📣 경기 시작! ${msg.home.name} vs ${msg.away.name}`, 'phase');
     }
   }
 
@@ -550,14 +538,6 @@ export default function MatchTab({ visible }: { visible: boolean }) {
             <span>{homeName} {possHomePct}%</span>
             <span>{100 - possHomePct}% {awayName}</span>
           </div>
-        </div>
-        <div id="match-feed" ref={feedRef}>
-          {feed.map((f) => (
-            <div className={'feed-item ' + f.type} key={f.id}>
-              <span className="fi-min">{f.minute}</span>
-              <span>{f.text}</span>
-            </div>
-          ))}
         </div>
       </div>
 
