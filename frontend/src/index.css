@@ -36,7 +36,10 @@ input, select {
   color: var(--text);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 14px;
+  /* iOS Safari/WebKit auto-zooms the whole page when focusing a text input
+     whose computed font-size is under 16px — 16px is the exact threshold
+     that suppresses it, not a cosmetic choice. */
+  font-size: 16px;
   outline: none;
 }
 input:focus, select:focus { border-color: var(--blue); }
@@ -452,7 +455,7 @@ input:focus, select:focus { border-color: var(--blue); }
 .owned-controls { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .owned-controls input, .owned-controls select {
   background: var(--panel); color: inherit; border: 1px solid var(--border);
-  border-radius: 8px; padding: 5px 8px; font-size: 13px;
+  border-radius: 8px; padding: 5px 8px; font-size: 16px;
 }
 .owned-controls input { flex: 1; min-width: 90px; }
 
