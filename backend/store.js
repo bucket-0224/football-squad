@@ -147,6 +147,17 @@ function putUser(user) {
   return user;
 }
 
+// 관리자 전용 계정 삭제(테스트 계정 정리 등) — 존재하지 않으면 false.
+function deleteUser(username) {
+  const d = load();
+  const lower = String(username).toLowerCase();
+  const entry = Object.entries(d.users).find(([, u]) => u.username.toLowerCase() === lower);
+  if (!entry) return false;
+  delete d.users[entry[0]];
+  save();
+  return true;
+}
+
 // ---- matches -----------------------------------------------------------
 
 function addMatch(record) {
@@ -206,6 +217,7 @@ module.exports = {
   getUser,
   findUserByName,
   putUser,
+  deleteUser,
   addMatch,
   matchesForUser,
   getMatchById,

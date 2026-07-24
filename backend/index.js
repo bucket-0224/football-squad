@@ -699,6 +699,24 @@ app.post('/api/admin/mail', (req, res) => {
   res.json({ ok: true, mail });
 });
 
+// Admin-only: permanently delete a user by username (test-account cleanup).
+// Same protection/call shape as /api/admin/mail:
+//   curl -X POST $API_BASE/api/admin/delete-user -H "x-admin-key: $ADMIN_KEY" \
+//     -H "Content-Type: application/json" -d '{"username":"seed_test1"}'
+app.post('/api/admin/delete-user', (req, res) => {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) return bad(res, 503, '관리자 기능이 비활성화되어 있습니다 (ADMIN_KEY 미설정).');
+  const provided = req.headers['x-admin-key'];
+  if (!provided || !timingSafeEqual(provided, adminKey)) {
+    return bad(res, 401, '관리자 인증 실패.');
+  }
+  const { username } = req.body || {};
+  if (!username || typeof username !== 'string') return bad(res, 400, '삭제할 아이디를 입력해 주세요.');
+  const ok = store.deleteUser(username.trim());
+  if (!ok) return bad(res, 404, '존재하지 않는 유저입니다.');
+  res.json({ ok: true, username: username.trim() });
+});
+
 // ---- 시즌 --------------------------------------------------------------------
 
 app.get('/api/season', (req, res) => {
