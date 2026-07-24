@@ -203,6 +203,9 @@ export class LiveMatchEngine {
   private active = false;
   private frameBound = (ts: number) => this.frame(ts);
   private bannerTimer: ReturnType<typeof setTimeout> | null = null;
+  private onVisibilityBound = () => {
+    if (document.visibilityState === 'visible') this.catchUpAfterHidden();
+  };
 
   // ---- viz state (mirrors the vanilla `viz` object) ----
   private players: Sprite[] = [];
@@ -253,12 +256,42 @@ export class LiveMatchEngine {
   mount(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
+    document.addEventListener('visibilitychange', this.onVisibilityBound);
   }
 
   unmount() {
     this.stop();
+    document.removeEventListener('visibilitychange', this.onVisibilityBound);
     this.canvas = null;
     this.ctx = null;
+  }
+
+  // 탭이 백그라운드로 가면 브라우저가 requestAnimationFrame을 거의 멈추거나
+  // 크게 늦추지만, 서버 WS 이벤트는 그대로 계속 도착해 queue에 쌓인다. 다시
+  // 눈에 보이는 순간 그 밀린 분량을 정상 프레임에서 처리하려 하면 backlogSec이
+  // 커져 speedMul이 최대 4배까지 뛰어, 그 몇 초 동안 선수들이 부자연스럽게
+  // 빠르게(거의 순간이동처럼 보이게) 움직인다 — "필드 위 선수가 스킵되거나
+  // 갑자기 나타난다"는 증상의 실제 원인. 다시 보이는 시점에 밀린 이벤트를
+  // 애니메이션 없이 조용히 정리해 정상 배속으로 즉시 복귀시킨다.
+  private catchUpAfterHidden() {
+    if (!this.active) return;
+    while (this.queue.length) {
+      const e = this.queue.shift() as MatchEvent;
+      if (e.score) this.cb.onScore(e.score.home, e.score.away);
+      this.cb.onFeedItem(e.minute + "'", e.text, e.type);
+    }
+    this.attack = null;
+    this.duel = null;
+    this.script = [];
+    this.carrier = null;
+    this.runner = null;
+    this.dispMin = this.srvMin;
+    this.shownMin = Math.floor(this.dispMin);
+    this.cb.onMinute(this.shownMin <= 90 ? `${this.shownMin}'` : `90+${this.shownMin - 90}'`);
+    // matchStartTs/lastTs 리셋 — 다음 프레임이 방금 정리한 backlog를 다시
+    // "밀린 시간"으로 계산해 speedMul을 또 올리는 걸 막는다.
+    this.matchStartTs = 0;
+    this.lastTs = 0;
   }
 
   start(msg: MatchStartMsg) {
