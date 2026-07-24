@@ -67,25 +67,39 @@ const ROLE_DEFS = {
   poacher: { label: '기본(포처)', pos: ['ST', 'CF'], isDefault: true, score: (a) => a.shooting * 0.4 + a.pace * 0.24 + a.dribbling * 0.26 + a.physical * 0.1 },
   target: { label: '타겟맨', pos: ['ST', 'CF'], score: (a) => a.shooting * 0.32 + a.physical * 0.34 + a.dribbling * 0.14 + a.passing * 0.1 + a.pace * 0.1 },
   deepForward: { label: '딥라잉 포워드', pos: ['ST', 'CF'], score: (a) => a.shooting * 0.28 + a.passing * 0.28 + a.dribbling * 0.28 + a.pace * 0.16 },
+  advancedForward: { label: '어드밴스드 포워드', pos: ['ST', 'CF'], score: (a) => a.pace * 0.32 + a.shooting * 0.3 + a.physical * 0.2 + a.dribbling * 0.18 },
+  falseNine: { label: '가짜 9번', pos: ['ST', 'CF'], score: (a) => a.passing * 0.34 + a.dribbling * 0.3 + a.shooting * 0.2 + a.pace * 0.16 },
+  completeForward: { label: '컴플리트 포워드', pos: ['ST', 'CF'], score: (a) => a.shooting * 0.26 + a.dribbling * 0.24 + a.passing * 0.2 + a.pace * 0.18 + a.physical * 0.12 },
 
   winger: { label: '기본(윙어)', pos: ['LW', 'RW'], isDefault: true, score: (a) => a.shooting * 0.4 + a.pace * 0.24 + a.dribbling * 0.26 + a.physical * 0.1 },
   invertedWinger: { label: '인버티드 윙어', pos: ['LW', 'RW'], score: (a) => a.shooting * 0.34 + a.passing * 0.26 + a.dribbling * 0.28 + a.pace * 0.12 },
+  widePlaymaker: { label: '와이드 플레이메이커', pos: ['LW', 'RW'], score: (a) => a.passing * 0.38 + a.dribbling * 0.28 + a.pace * 0.2 + a.shooting * 0.14 },
+  raumdeuter: { label: '라움도이터', pos: ['LW', 'RW'], score: (a) => a.pace * 0.34 + a.shooting * 0.32 + a.dribbling * 0.22 + a.physical * 0.12 },
 
   playmaker: { label: '기본(공격형 미드필더)', pos: ['CAM'], isDefault: true, score: (a) => a.passing * 0.33 + a.dribbling * 0.24 + a.physical * 0.18 + a.defending * 0.13 + a.pace * 0.12 },
   shadowStriker: { label: '섀도우 스트라이커', pos: ['CAM'], score: (a) => a.shooting * 0.32 + a.dribbling * 0.28 + a.pace * 0.22 + a.passing * 0.18 },
+  advancedPlaymaker: { label: '어드밴스드 플레이메이커', pos: ['CAM'], score: (a) => a.passing * 0.42 + a.dribbling * 0.26 + a.pace * 0.16 + a.defending * 0.16 },
+  enganche: { label: '엔간체', pos: ['CAM'], score: (a) => a.dribbling * 0.34 + a.passing * 0.34 + a.shooting * 0.2 + a.pace * 0.12 },
 
   box2box: { label: '기본(박스투박스)', pos: ['CM', 'LM', 'RM'], isDefault: true, score: (a) => a.passing * 0.33 + a.dribbling * 0.24 + a.physical * 0.18 + a.defending * 0.13 + a.pace * 0.12 },
   deepLyingPM: { label: '딥라잉 플레이메이커', pos: ['CM', 'LM', 'RM'], score: (a) => a.passing * 0.42 + a.dribbling * 0.2 + a.defending * 0.18 + a.pace * 0.1 + a.physical * 0.1 },
+  mezzala: { label: '메찰라', pos: ['CM', 'LM', 'RM'], score: (a) => a.dribbling * 0.3 + a.passing * 0.28 + a.pace * 0.24 + a.physical * 0.18 },
+  roamingPM: { label: '로밍 플레이메이커', pos: ['CM', 'LM', 'RM'], score: (a) => a.passing * 0.36 + a.dribbling * 0.26 + a.defending * 0.2 + a.pace * 0.18 },
 
   anchor: { label: '기본(수비형 미드필더)', pos: ['CDM'], isDefault: true, score: (a) => a.passing * 0.33 + a.dribbling * 0.24 + a.physical * 0.18 + a.defending * 0.13 + a.pace * 0.12 },
   ballPlayingMid: { label: '볼 플레잉 미드필더', pos: ['CDM'], score: (a) => a.passing * 0.38 + a.dribbling * 0.22 + a.defending * 0.24 + a.pace * 0.16 },
+  regista: { label: '레지스타', pos: ['CDM'], score: (a) => a.passing * 0.46 + a.dribbling * 0.22 + a.defending * 0.2 + a.pace * 0.12 },
+  halfBack: { label: '하프백', pos: ['CDM'], score: (a) => a.defending * 0.42 + a.physical * 0.26 + a.passing * 0.2 + a.pace * 0.12 },
 
   fullback: { label: '기본(풀백)', pos: ['LB', 'RB'], isDefault: true, score: (a) => a.defending * 0.5 + a.physical * 0.25 + a.pace * 0.15 + a.passing * 0.1 },
   wingback: { label: '윙백', pos: ['LB', 'RB', 'LWB', 'RWB'], score: (a) => a.pace * 0.3 + a.defending * 0.28 + a.physical * 0.24 + a.passing * 0.18 },
   invertedFullback: { label: '인버티드 풀백', pos: ['LB', 'RB'], score: (a) => a.defending * 0.36 + a.passing * 0.34 + a.physical * 0.16 + a.pace * 0.14 },
+  completeWingback: { label: '컴플리트 윙백', pos: ['LB', 'RB', 'LWB', 'RWB'], score: (a) => a.pace * 0.26 + a.defending * 0.26 + a.passing * 0.26 + a.physical * 0.22 },
 
   stopper: { label: '기본(센터백)', pos: ['CB'], isDefault: true, score: (a) => a.defending * 0.5 + a.physical * 0.25 + a.pace * 0.15 + a.passing * 0.1 },
   ballPlayingCB: { label: '볼 플레잉 센터백', pos: ['CB'], score: (a) => a.defending * 0.4 + a.passing * 0.3 + a.physical * 0.18 + a.pace * 0.12 },
+  coverCB: { label: '커버링 센터백', pos: ['CB'], score: (a) => a.pace * 0.32 + a.defending * 0.4 + a.physical * 0.16 + a.passing * 0.12 },
+  noNonsenseCB: { label: '노난센스 센터백', pos: ['CB'], score: (a) => a.defending * 0.52 + a.physical * 0.36 + a.pace * 0.12 },
 };
 
 // shooting/passing coefficients hand-copied from each ROLE_DEFS entry's score
@@ -98,19 +112,33 @@ const ROLE_EMPHASIS = {
   poacher: { shooting: 0.4, passing: 0 },
   target: { shooting: 0.32, passing: 0.1 },
   deepForward: { shooting: 0.28, passing: 0.28 },
+  advancedForward: { shooting: 0.3, passing: 0 },
+  falseNine: { shooting: 0.2, passing: 0.34 },
+  completeForward: { shooting: 0.26, passing: 0.2 },
   winger: { shooting: 0.4, passing: 0 },
   invertedWinger: { shooting: 0.34, passing: 0.26 },
+  widePlaymaker: { shooting: 0.14, passing: 0.38 },
+  raumdeuter: { shooting: 0.32, passing: 0 },
   playmaker: { shooting: 0, passing: 0.33 },
   shadowStriker: { shooting: 0.32, passing: 0.18 },
+  advancedPlaymaker: { shooting: 0, passing: 0.42 },
+  enganche: { shooting: 0.2, passing: 0.34 },
   box2box: { shooting: 0, passing: 0.33 },
   deepLyingPM: { shooting: 0, passing: 0.42 },
+  mezzala: { shooting: 0, passing: 0.28 },
+  roamingPM: { shooting: 0, passing: 0.36 },
   anchor: { shooting: 0, passing: 0.33 },
   ballPlayingMid: { shooting: 0, passing: 0.38 },
+  regista: { shooting: 0, passing: 0.46 },
+  halfBack: { shooting: 0, passing: 0.2 },
   fullback: { shooting: 0, passing: 0.1 },
   wingback: { shooting: 0, passing: 0.18 },
   invertedFullback: { shooting: 0, passing: 0.34 },
+  completeWingback: { shooting: 0, passing: 0.26 },
   stopper: { shooting: 0, passing: 0.1 },
   ballPlayingCB: { shooting: 0, passing: 0.3 },
+  coverCB: { shooting: 0, passing: 0.12 },
+  noNonsenseCB: { shooting: 0, passing: 0 },
 };
 
 // Only apply a role if it's actually valid for the card's real position —
