@@ -172,6 +172,18 @@ input:focus, select:focus { border-color: var(--blue); }
   #main-tabs .tab-icon { font-size: 16px; }
 }
 
+/* 상점/정보처럼 하나의 상단 탭 아래 여러 화면을 묶었을 때의 2단계 서브탭 —
+   모바일에서는 #main-tabs가 하단으로 빠지므로 콘텐츠 맨 위 세그먼트로 보인다 */
+.sub-tabs {
+  display: flex; gap: 6px; margin-bottom: 16px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 3px; background: var(--panel);
+}
+.sub-tabs button {
+  flex: 1; background: none; border: none; color: var(--dim);
+  padding: 8px 10px; font-size: 13px; font-weight: 700; border-radius: 8px;
+}
+.sub-tabs button.active { color: var(--text); background: var(--panel2); }
+
 /* ===== squad ===== */
 #squad-mode { display: flex; gap: 8px; margin-bottom: 8px; }
 #squad-mode button {
