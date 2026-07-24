@@ -67,21 +67,32 @@ export function fitByBand(pos: string, band: Band): [string, string] {
   return ['fit-bad', '부적합'];
 }
 
-// 밴드(y) 안에서도 왼쪽/중앙/오른쪽 중 어디인지(x)로 구체적인 포지션 라벨을
-// 정한다 — 카드에 표시되는 "지금 이 자리가 실제로 무슨 포지션인지"용이며,
-// 적합도/OVR 페널티 계산(bandPenalty, 선수 본인의 실제 포지션 기준)과는
-// 완전히 별개다.
-const ZONE_LABEL: Record<1 | 2 | 3 | 4, { left: string; center: string; right: string }> = {
-  1: { left: 'LW', center: 'ST', right: 'RW' },
-  2: { left: 'LM', center: 'CAM', right: 'RM' },
-  3: { left: 'LWB', center: 'CDM', right: 'RWB' },
-  4: { left: 'LB', center: 'CB', right: 'RB' },
+// 밴드(y) 안에서도 가로(x) 어디인지로 구체적인 포지션 라벨을 정한다 — 카드에
+// 표시되는 "지금 이 자리가 실제로 무슨 포지션인지"용이며, 적합도/OVR 페널티
+// 계산(bandPenalty, 선수 본인의 실제 포지션 기준)과는 완전히 별개다.
+//
+// 좌/우 끝(farLeft·farRight)은 윙어·풀백처럼 완전히 폭이 넓은 자리(LM/RM,
+// LB/RB, LWB/RWB, LW/RW)로 분리하고, 그보다 안쪽(left·right)은 "중앙에
+// 두 명이 나란히 서는" 자리(LCM/RCM, LCB/RCB, LCDM/RCDM, LST/RST)로 잡는다.
+// 정중앙(center)은 그 라인에 한 명만 있을 때의 자리(CM 계열은 CAM, 나머지는
+// 각 라인의 기본형)다. 실제 포메이션 좌표(예: 4-3-3의 CM 3명 = 72/50/28,
+// 4-3-3의 CB 2명 = 63/37)를 기준으로 경계값을 잡아, 프리셋을 그대로 두면
+// 항상 "LCM · CM · RCM"처럼 자연스러운 조합이 나오도록 확인했다.
+type Zone = 'farLeft' | 'left' | 'center' | 'right' | 'farRight';
+
+const ZONE_LABEL: Record<1 | 2 | 3 | 4, Record<Zone, string>> = {
+  1: { farLeft: 'LW', left: 'LST', center: 'ST', right: 'RST', farRight: 'RW' },
+  2: { farLeft: 'LM', left: 'LCM', center: 'CAM', right: 'RCM', farRight: 'RM' },
+  3: { farLeft: 'LWB', left: 'LCDM', center: 'CDM', right: 'RCDM', farRight: 'RWB' },
+  4: { farLeft: 'LB', left: 'LCB', center: 'CB', right: 'RCB', farRight: 'RB' },
 };
 
-function xZone(x: number): 'left' | 'center' | 'right' {
-  if (x < 33) return 'left';
-  if (x >= 67) return 'right';
-  return 'center';
+function xZone(x: number): Zone {
+  if (x < 25) return 'farLeft';
+  if (x < 45) return 'left';
+  if (x < 55) return 'center';
+  if (x < 75) return 'right';
+  return 'farRight';
 }
 
 export function slotPositionLabel(x: number, y: number): string {
