@@ -29,6 +29,7 @@ dynteams
 
 season.init();
 devotion.init();
+predictions.init();
 
 const PORT = process.env.PORT || 3000;
 const STARTING_COINS = 1500;

@@ -29,11 +29,33 @@ export default function PlayerDetailModal({ playerId, onClose }: { playerId: str
             닫기
           </button>
         </div>
-        <div className="nego-body">
+        <div className="nego-body player-detail-nego-body">
           <div id="detail-card-col">
-            <PlayerCard player={card} size="md" stats />
+            <PlayerCard player={card} size="sm" />
           </div>
           <div className="nego-main">
+            {card.attrs && (
+              <div className="detail-attrs">
+                <div>
+                  <span className="dim">스피드</span> <b>{card.attrs.pace}</b>
+                </div>
+                <div>
+                  <span className="dim">슈팅</span> <b>{card.attrs.shooting}</b>
+                </div>
+                <div>
+                  <span className="dim">패스</span> <b>{card.attrs.passing}</b>
+                </div>
+                <div>
+                  <span className="dim">드리블</span> <b>{card.attrs.dribbling}</b>
+                </div>
+                <div>
+                  <span className="dim">수비</span> <b>{card.attrs.defending}</b>
+                </div>
+                <div>
+                  <span className="dim">피지컬</span> <b>{card.attrs.physical}</b>
+                </div>
+              </div>
+            )}
             <div className="detail-physical">
               <span>📏 신장 {card.height ? `${card.height}cm` : '정보 없음'}</span>
               <span>⚖️ 체중 {card.weight ? `${card.weight}kg` : '정보 없음'}</span>

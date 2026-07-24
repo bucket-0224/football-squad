@@ -180,25 +180,23 @@ async function refreshUpcoming(p) {
 }
 
 // Fetch real final scores for fixtures whose match should have ended.
+// Looks up each due fixture directly by its own event id (lookupevent.php —
+// same endpoint refreshLive already uses for live scores) rather than
+// searching a shared "recent past events for this league" list: that bulk
+// endpoint is capped to a small handful of events on the free tier, so a
+// fixture could silently never be found there once enough other matches
+// had since taken its place in the window — leaving it stuck open/live
+// forever even with a working cron calling this on schedule.
 async function resolveDue(p, now) {
-  const dueLeagues = [
-    ...new Set(
-      p.fixtures
-        .filter((f) => f.status !== 'done' && now >= f.kickoffAt + MATCH_RUNNING_MS)
-        .map((f) => f.league)
-    ),
-  ];
-  for (const leagueId of dueLeagues) {
-    const data = await tsdb(`eventspastleague.php?id=${leagueId}`);
-    const events = (data && data.events) || [];
-    for (const ev of events) {
-      const fx = p.fixtures.find((f) => f.eventId === ev.idEvent && f.status !== 'done');
-      if (!fx) continue;
-      const h = Number(ev.intHomeScore);
-      const a = Number(ev.intAwayScore);
-      if (ev.intHomeScore == null || Number.isNaN(h) || Number.isNaN(a)) continue;
-      settle(fx, { home: h, away: a });
-    }
+  const due = p.fixtures.filter((f) => f.status !== 'done' && now >= f.kickoffAt + MATCH_RUNNING_MS);
+  for (const fx of due) {
+    const data = await tsdb(`lookupevent.php?id=${fx.eventId}`);
+    const ev = data && data.events && data.events[0];
+    if (!ev) continue;
+    const h = Number(ev.intHomeScore);
+    const a = Number(ev.intAwayScore);
+    if (ev.intHomeScore == null || Number.isNaN(h) || Number.isNaN(a)) continue;
+    settle(fx, { home: h, away: a });
   }
   // move settled fixtures into the history list
   const settled = p.fixtures.filter((f) => f.status === 'done');
@@ -343,4 +341,17 @@ function placeBet(user, fixtureId, pick, score) {
   return { fixture: fixtureView(fx, user.id) };
 }
 
-module.exports = { getRounds, placeBet };
+// Real cron sweep (mirrors season.js/devotion.js's init/setInterval shape).
+// tick() previously only ran when a user happened to request /api/predictions
+// (getRounds), so a fixture nobody checked on could sit at status:'open' or
+// 'live' indefinitely after the real match had long since finished — this
+// runs it independent of any request, so results settle promptly.
+const TICK_INTERVAL_MS = 5 * 60 * 1000; // matches RESULT_TTL_MS granularity
+function init() {
+  tick().catch((err) => console.error('[predictions] init tick failed:', err));
+  setInterval(() => {
+    tick().catch((err) => console.error('[predictions] cron tick failed:', err));
+  }, TICK_INTERVAL_MS);
+}
+
+module.exports = { init, getRounds, placeBet };
