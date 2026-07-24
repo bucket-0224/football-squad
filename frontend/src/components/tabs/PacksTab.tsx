@@ -56,17 +56,19 @@ export default function PacksTab() {
           return (
             <div className={'pack-tile ' + meta.cls} key={p.id}>
               {meta.img && <img className="pk-img" src={meta.img} alt="" />}
-              <span className="pk-name">{p.name}</span>
-              <span className="pk-desc">{meta.desc}</span>
-              <span className="pk-price">🪙 {p.price.toLocaleString()}</span>
-              <span className="pk-actions">
+              <div className="pk-info">
+                <span className="pk-name">{p.name}</span>
+                <span className="pk-desc">{meta.desc}</span>
+                <span className="pk-price">🪙 {p.price.toLocaleString()}</span>
+              </div>
+              <div className="pk-actions">
                 <button type="button" className="btn small primary" onClick={() => openPack(p.id, 1)}>
                   1회 뽑기
                 </button>
                 <button type="button" className="btn small" onClick={() => openPack(p.id, 5)}>
                   5연속 🪙{(p.price * 5).toLocaleString()}
                 </button>
-              </span>
+              </div>
             </div>
           );
         })}
