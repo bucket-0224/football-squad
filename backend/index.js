@@ -97,10 +97,11 @@ function ratingSummary(squad) {
   };
 }
 
-// Squad + the user's 강화 levels/헌신도, so ratings reflect enhanced cards
-// and player mood (captain/vice-captain/roles already live on the squad object).
+// Squad + the user's 강화 levels/헌신도/Ultra 진화 목록, so ratings reflect
+// enhanced+evolved cards and player mood (captain/vice-captain/roles already
+// live on the squad object).
 function withUpgrades(u, squad) {
-  return { ...squad, upgrades: u.upgrades || {}, devotion: u.devotion || {} };
+  return { ...squad, upgrades: u.upgrades || {}, devotion: u.devotion || {}, ultra: u.ultra || [] };
 }
 
 function sanitizeUser(u) {
@@ -116,6 +117,7 @@ function sanitizeUser(u) {
     owned: u.owned,
     drawn: u.drawn,
     upgrades: u.upgrades || {},
+    ultra: u.ultra || [],
     playerStats: u.playerStats || {},
     devotion: u.devotion || {},
     complaints: devotion.publicComplaints(u),
@@ -206,6 +208,7 @@ app.post('/api/register', async (req, res) => {
     owned: [...roster],
     drawn: [],
     upgrades: {},
+    ultra: [], // Ultra 등급 진화 완료한 playerId 목록
     playerStats: {}, // id -> {goals, assists}
     devotion: {}, // id -> 0..100 (헌신도)
     complaints: [], // 여러 건 누적되는 pending 선수 불만
@@ -288,6 +291,7 @@ app.get('/api/bootstrap', (req, res) => {
     market: players.marketList(),
     packs: transfer.packList(),
     enhance: players.ENHANCE,
+    ultra: { cost: players.ULTRA_COST, bonus: players.ULTRA_BONUS },
     roles: Object.fromEntries(
       Object.entries(ROLE_DEFS).map(([id, r]) => [id, { label: r.label, pos: r.pos, isDefault: !!r.isDefault }])
     ),
@@ -492,6 +496,37 @@ app.post('/api/players/enhance', auth.authMiddleware, (req, res) => {
   });
 });
 
+// Ultra 등급 진화 — 요청: "강화가 5강까지 끝나면 Ultra로 등급 진화 3000크레딧을
+// 소모해서 되게 해주고". +5 강화를 이미 완료한 카드에 한해 1회만 가능하며,
+// 강화(확률/실패 가능)와 달리 코인만 내면 항상 성공한다 — 이미 5강까지
+// 확률을 뚫은 카드에 대한 "확정" 보상 트랙으로 설계했다(사용자가 실제
+// 능력치 보너스를 원한다고 확인 — backend/data/players.js의 ULTRA_BONUS).
+app.post('/api/players/evolve', auth.authMiddleware, (req, res) => {
+  const { playerId } = req.body || {};
+  const p = players.getPlayer(playerId);
+  if (!p || !req.user.owned.includes(playerId)) {
+    return bad(res, 400, '보유하지 않은 선수입니다.');
+  }
+  const cur = (req.user.upgrades && req.user.upgrades[playerId]) || 0;
+  if (cur < players.ENHANCE.maxLevel) {
+    return bad(res, 400, `+${players.ENHANCE.maxLevel} 강화를 먼저 완료해야 합니다.`);
+  }
+  if (!Array.isArray(req.user.ultra)) req.user.ultra = [];
+  if (req.user.ultra.includes(playerId)) {
+    return bad(res, 400, '이미 Ultra로 진화한 선수입니다.');
+  }
+  if (req.user.coins < players.ULTRA_COST) {
+    return bad(res, 400, `코인이 부족합니다. (필요: ${players.ULTRA_COST}, 보유: ${req.user.coins})`);
+  }
+  req.user.coins -= players.ULTRA_COST;
+  req.user.ultra.push(playerId);
+  store.putUser(req.user);
+  res.json({
+    player: players.publicPlayer(playerId),
+    user: sanitizeUser(req.user),
+  });
+});
+
 // ---- market ----------------------------------------------------------------
 
 // Signing a player is a negotiation: club stage (transfer fee), then
@@ -546,22 +581,41 @@ app.post('/api/packs/open', auth.authMiddleware, (req, res) => {
 
 app.post('/api/market/sell', auth.authMiddleware, (req, res) => {
   const { playerId } = req.body || {};
-  const price = players.getPrice(playerId);
-  if (!price || !req.user.owned.includes(playerId)) {
+  if (!req.user.owned.includes(playerId)) {
     return bad(res, 400, '보유하지 않은 선수입니다.');
   }
-  // a sold player leaves everything: roster, pack unlocks, 강화 and both lineups
+  // Ultra 진화 카드("이 경우에는 이적시장에 값을 매길 수 없기 때문에, 현재
+  // 활약한 금액 + 2000 크레딧으로 이적시장 판매가 가능하게 해줘"): 뽑기로
+  // 얻은 비-시장 카드가 많아 getPrice가 null인 경우가 흔하므로, 그럴 땐
+  // ultraSellBase로 진화 후 OVR 기준 대체 시세를 만들어 낸다.
+  const isUltra = Array.isArray(req.user.ultra) && req.user.ultra.includes(playerId);
+  let price;
+  if (isUltra) {
+    const raw = players.getPlayer(playerId);
+    const lvl = (req.user.upgrades && req.user.upgrades[playerId]) || 0;
+    const boosted = raw && players.upgraded(raw, lvl, true);
+    price = boosted ? players.ultraSellBase(playerId, boosted.ovr) : null;
+  } else {
+    price = players.getPrice(playerId);
+  }
+  if (!price) {
+    return bad(res, 400, '이 선수는 이적시장에서 판매할 수 없습니다.');
+  }
+  // a sold player leaves everything: roster, pack unlocks, 강화/Ultra and both lineups
   req.user.owned = req.user.owned.filter((id) => id !== playerId);
   req.user.drawn = req.user.drawn.filter((id) => id !== playerId);
   if (req.user.upgrades) delete req.user.upgrades[playerId];
+  if (Array.isArray(req.user.ultra)) req.user.ultra = req.user.ultra.filter((id) => id !== playerId);
   req.user.squad.starters = req.user.squad.starters.map((id) => (id === playerId ? null : id));
   req.user.pvpSquad.starters = req.user.pvpSquad.starters.map((id) =>
     id === playerId ? null : id
   );
-  // 실적(득점/어시스트) 좋은 카드는 시장가보다 비싸게 팔린다.
+  // 실적(득점/어시스트) 좋은 카드는 시장가보다 비싸게 팔린다 — "현재 활약한
+  // 금액"이 가리키는 바로 이 공식. Ultra는 여기에 진화 비용을 일부
+  // 보전해주는 의미로 +2000을 더한다(요청 그대로).
   const st = req.user.playerStats[playerId] || { goals: 0, assists: 0 };
   const perf = Math.min(0.5, st.goals * 0.03 + st.assists * 0.02);
-  const coinsGained = Math.round(price * SELL_RATE * (1 + perf));
+  const coinsGained = Math.round(price * SELL_RATE * (1 + perf)) + (isUltra ? 2000 : 0);
   req.user.coins += coinsGained;
   delete req.user.playerStats[playerId];
   store.putUser(req.user);
@@ -620,6 +674,9 @@ app.post('/api/club/change', auth.authMiddleware, async (req, res) => {
   Object.keys(req.user.upgrades || {}).forEach((id) => {
     if (!nowOwned.has(id)) delete req.user.upgrades[id];
   });
+  if (Array.isArray(req.user.ultra)) {
+    req.user.ultra = req.user.ultra.filter((id) => nowOwned.has(id));
+  }
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user) });
 });

@@ -469,6 +469,18 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .tier-special .fc-ovr { color: #ffd76e; }
 
+/* Ultra 등급 진화(+5 강화 완료 후 유저가 직접 진화) — 카탈로그가 미리
+   정해둔 tier-special(제작 단계에서 지정된 강화형 카드)과 달리 유저 행동
+   으로만 도달하는, 이 게임에서 가장 높은 등급이라 별도의 확실히 구별되는
+   색으로 잡았다(보라색은 tier-special이 이미 씀). */
+.tier-ultra {
+  background: linear-gradient(165deg, #d9f8ff 0%, #7fe3ff 30%, #2ba9e8 65%, #0d5fa8 100%);
+  color: #052033;
+  box-shadow: 0 0 14px rgba(85, 210, 255, .75);
+}
+.tier-ultra .fc-ovr { color: #ff5f5f; }
+.tier-ultra .fc-name { border-top-color: rgba(0,0,0,.2); }
+
 .fc-head { position: absolute; top: 7px; left: 8px; text-align: center; line-height: 1.05; z-index: 2; }
 .fc-ovr { display: block; font-weight: 900; }
 .fc-pos { display: block; font-weight: 700; opacity: .75; }

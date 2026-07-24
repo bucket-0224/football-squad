@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
-import { upLevel, upgradedCard } from '../game/cards';
+import { isUltra, upLevel, upgradedCard } from '../game/cards';
 import PlayerCard from './PlayerCard';
 
 interface LogLine {
@@ -9,7 +9,7 @@ interface LogLine {
 }
 
 export default function EnhanceModal({ playerId, onClose }: { playerId: string; onClose: () => void }) {
-  const { me, bootstrap, catalog, enhancePlayer } = useAppStore();
+  const { me, bootstrap, catalog, enhancePlayer, evolvePlayer } = useAppStore();
   const [busy, setBusy] = useState(false);
   const [log, setLog] = useState<LogLine[]>([]);
   const [flashCls, setFlashCls] = useState('');
@@ -21,12 +21,15 @@ export default function EnhanceModal({ playerId, onClose }: { playerId: string; 
 
   const lvl = upLevel(me, playerId);
   const cfg = bootstrap.enhance;
+  const evolved = isUltra(me, playerId);
   const cur = upgradedCard(me, base)!;
   const maxed = lvl >= cfg.maxLevel;
   const next = lvl + 1;
   const cost = Math.max(50, Math.round((base.price || 200) * cfg.costRate * next));
   const rate = Math.round((cfg.rates[next - 1] || 0) * 100);
   const short = me.coins < cost;
+  const ultraCost = bootstrap.ultra.cost;
+  const ultraShort = me.coins < ultraCost;
 
   const onTry = async () => {
     if (busy) return;
@@ -41,6 +44,23 @@ export default function EnhanceModal({ playerId, onClose }: { playerId: string; 
           ? { text: `✨ 강화 성공! +${r.level} 단계 (−🪙${r.cost.toLocaleString()})`, cls: 'good' }
           : { text: `💥 강화 실패… 단계는 유지됩니다 (−🪙${r.cost.toLocaleString()})`, cls: 'bad' },
       ]);
+    } catch (err) {
+      setLog((l) => [...l, { text: err instanceof Error ? err.message : String(err), cls: 'bad' }]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // 요청: "강화가 5강까지 끝나면 Ultra로 등급 진화 3000크레딧을 소모해서
+  // 되게 해주고" — 확률이 있는 강화와 달리 코인만 내면 항상 성공한다.
+  const onEvolve = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await evolvePlayer(playerId);
+      setFlashCls('enh-flash');
+      setFlashToken((t) => t + 1);
+      setLog((l) => [...l, { text: `🌟 Ultra 진화 완료! (−🪙${ultraCost.toLocaleString()})`, cls: 'good' }]);
     } catch (err) {
       setLog((l) => [...l, { text: err instanceof Error ? err.message : String(err), cls: 'bad' }]);
     } finally {
@@ -79,9 +99,17 @@ export default function EnhanceModal({ playerId, onClose }: { playerId: string; 
               <b>+{lvl}</b>
             </div>
             {maxed ? (
-              <div id="enh-next">
-                <span className="dim">✨ 최대 강화 단계에 도달했습니다.</span>
-              </div>
+              evolved ? (
+                <div id="enh-next">
+                  <span className="dim">🌟 Ultra 등급 진화까지 완료했습니다.</span>
+                </div>
+              ) : (
+                <div id="enh-next" className="small-text">
+                  🌟 Ultra로 진화하면 OVR·능력치가 추가로 <b>+{bootstrap.ultra.bonus}</b> 오릅니다 (
+                  <b>OVR {cur.ovr} → {Math.min(99, cur.ovr + bootstrap.ultra.bonus)}</b>). 확률 없이 코인만 내면
+                  확정 성공하며, 진화 후에는 이적시장에서 실적가 + 🪙2,000으로 판매할 수 있습니다.
+                </div>
+              )
             ) : (
               <div id="enh-next" className="small-text">
                 +{next} 강화 시 OVR <b>{cur.ovr}</b> → <b>{Math.min(99, base.ovr + next)}</b> · 성공 확률{' '}
@@ -95,13 +123,21 @@ export default function EnhanceModal({ playerId, onClose }: { playerId: string; 
                 </div>
               ))}
             </div>
-            <button type="button" className="btn primary" disabled={maxed || short || busy} onClick={onTry}>
-              {maxed
-                ? '강화 완료'
-                : short
-                  ? `코인 부족 (🪙 ${cost.toLocaleString()} 필요)`
-                  : `⚡ 강화 시도 (🪙 ${cost.toLocaleString()})`}
-            </button>
+            {maxed && !evolved ? (
+              <button type="button" className="btn primary" disabled={ultraShort || busy} onClick={onEvolve}>
+                {ultraShort
+                  ? `코인 부족 (🪙 ${ultraCost.toLocaleString()} 필요)`
+                  : `🌟 Ultra 진화 (🪙 ${ultraCost.toLocaleString()})`}
+              </button>
+            ) : (
+              <button type="button" className="btn primary" disabled={maxed || short || busy} onClick={onTry}>
+                {maxed
+                  ? '🌟 Ultra 진화 완료'
+                  : short
+                    ? `코인 부족 (🪙 ${cost.toLocaleString()} 필요)`
+                    : `⚡ 강화 시도 (🪙 ${cost.toLocaleString()})`}
+              </button>
+            )}
           </div>
         </div>
       </div>

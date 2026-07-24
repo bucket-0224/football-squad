@@ -33,6 +33,11 @@ export interface EnhanceResult {
   cost: number;
 }
 
+// Ultra 등급 진화 결과 — enhance와 달리 실패가 없다(코인만 내면 확정 성공).
+export interface EvolveResult {
+  player: CatalogPlayer;
+}
+
 interface AppState {
   // session
   token: string | null;
@@ -61,6 +66,7 @@ interface AppState {
   saveSquad: (patch: SquadPatch) => Promise<void>;
   autoPlaceSquad: () => Promise<void>;
   enhancePlayer: (playerId: string) => Promise<EnhanceResult>;
+  evolvePlayer: (playerId: string) => Promise<EvolveResult>;
   sellPlayer: (playerId: string) => Promise<{ coinsGained: number; perfBonusPct: number }>;
   searchRemotePlayers: (q: string) => Promise<{ found: number; added: number }>;
   claimMail: (mailId: string) => Promise<void>;
@@ -173,6 +179,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const r = await api.post<{ user: User } & EnhanceResult>('/api/players/enhance', { playerId });
     set({ me: r.user });
     return { success: r.success, level: r.level, cost: r.cost };
+  },
+
+  evolvePlayer: async (playerId) => {
+    const r = await api.post<{ user: User } & EvolveResult>('/api/players/evolve', { playerId });
+    set({ me: r.user });
+    return { player: r.player };
   },
 
   sellPlayer: async (playerId) => {

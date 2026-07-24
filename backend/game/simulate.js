@@ -173,12 +173,15 @@ function devotionFactor(dev) {
 
 // Compute the four sectional ratings (0..100) + overall from a squad lineup.
 // squad.upgrades (id -> 강화 level) boosts a card's OVR/attrs when present.
-// squad.devotion (id -> 0..100) and squad.captain/viceCaptain feed a small
-// per-player execution multiplier alongside position chemistry.
+// squad.ultra (id[]) adds the Ultra 진화 bonus on top for cards that finished
+// it (backend/data/players.js의 ULTRA_BONUS 참고). squad.devotion (id ->
+// 0..100) and squad.captain/viceCaptain feed a small per-player execution
+// multiplier alongside position chemistry.
 function computeRatings(squad) {
   const formation = FORMATIONS[squad.formation] ? squad.formation : DEFAULT_FORMATION;
   const slots = FORMATIONS[formation];
   const up = squad.upgrades || null;
+  const ultraSet = new Set(squad.ultra || []);
   const devotionMap = squad.devotion || null;
   const captainId = squad.captain || null;
   const viceCaptainId = squad.viceCaptain || null;
@@ -189,7 +192,7 @@ function computeRatings(squad) {
   slots.forEach((slotPos, i) => {
     const id = squad.starters[i];
     let p = players.getPlayer(id);
-    if (p && up && up[id]) p = players.upgraded(p, up[id]);
+    if (p && ((up && up[id]) || ultraSet.has(id))) p = players.upgraded(p, up && up[id], ultraSet.has(id));
     const slotLine = LINE[slotPos];
     if (!p) {
       // empty slot -> the youth stand-in (matches the OVR 40 shown on pitch)

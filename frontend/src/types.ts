@@ -62,6 +62,7 @@ export interface User {
   owned: string[];
   drawn: string[];
   upgrades: Record<string, number>;
+  ultra: string[]; // Ultra 등급 진화 완료한 playerId 목록
   playerStats: Record<string, { goals: number; assists: number }>;
   devotion: Record<string, number>;
   complaints: Complaint[];
@@ -118,6 +119,7 @@ export interface CatalogPlayer {
   price: number | null;
   enhanced?: boolean;
   up?: number;
+  ultra?: boolean; // Ultra 등급 진화 완료 여부 (upgradedCard가 채워줌)
   attrs?: PlayerAttrs;
   youth?: boolean;
   height?: number; // cm
@@ -134,6 +136,7 @@ export interface Bootstrap {
   market: CatalogPlayer[];
   packs: unknown[];
   enhance: { maxLevel: number; rates: number[]; costRate: number };
+  ultra: { cost: number; bonus: number };
   roles: Record<string, Role>;
 }
 

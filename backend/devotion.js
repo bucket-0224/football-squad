@@ -241,6 +241,7 @@ function resolveTransferRequest(user, requestId, choice) {
     user.owned = user.owned.filter((id) => id !== playerId);
     user.drawn = user.drawn.filter((id) => id !== playerId);
     if (user.upgrades) delete user.upgrades[playerId];
+    if (Array.isArray(user.ultra)) user.ultra = user.ultra.filter((id) => id !== playerId);
     user.squad.starters = user.squad.starters.map((id) => (id === playerId ? null : id));
     user.pvpSquad.starters = user.pvpSquad.starters.map((id) => (id === playerId ? null : id));
     delete user.playerStats[playerId];

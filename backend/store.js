@@ -82,6 +82,7 @@ function normalizeUser(u) {
   if (!u) return u;
   if (!Array.isArray(u.drawn)) u.drawn = [];
   if (!u.upgrades || typeof u.upgrades !== 'object') u.upgrades = {}; // 강화 단계
+  if (!Array.isArray(u.ultra)) u.ultra = []; // Ultra 등급 진화 완료한 playerId 목록
 
   // 감독 스타일(가입 시 지정한 선호 포메이션/전술) — 이 필드가 생기기 전에
   // 만든 계정은 당시 스쿼드 설정을 그대로 선호도로 간주해 역채움한다.

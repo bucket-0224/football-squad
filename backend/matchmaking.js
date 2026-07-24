@@ -70,9 +70,10 @@ function lineupOf(squad) {
   const formation = squad && FORMATIONS[squad.formation] ? squad.formation : DEFAULT_FORMATION;
   const slots = FORMATIONS[formation];
   const up = (squad && squad.upgrades) || {};
+  const ultraSet = new Set((squad && squad.ultra) || []);
   return Array.from({ length: 11 }, (_, i) => {
     const raw = starters[i] && players.getPlayer(starters[i]);
-    const p = raw && players.upgraded(raw, up[raw.id]); // 강화 반영
+    const p = raw && players.upgraded(raw, up[raw.id], ultraSet.has(raw.id)); // 강화 + Ultra 진화 반영
     if (!p) {
       return {
         id: null,
@@ -522,6 +523,7 @@ function attach(server) {
       starters: [...sq.starters],
       tactic: sq.tactic,
       upgrades: (user && user.upgrades) || {},
+      ultra: (user && user.ultra) || [],
       devotion: (user && user.devotion) || {},
       captain: sq.captain || null,
       viceCaptain: sq.viceCaptain || null,

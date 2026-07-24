@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { toast } from '../store/useToastStore';
-import { activePoolIds, activeSquad, upLevel, upgradedCard } from '../game/cards';
+import { activePoolIds, activeSquad, sellPreview, upLevel, upgradedCard } from '../game/cards';
 import PlayerCard from './PlayerCard';
 import type { CatalogPlayer } from '../types';
 
@@ -104,7 +104,7 @@ export default function OwnedList({
                     ⚡{lvl ? `+${lvl}` : '강화'}
                   </button>
                   <button type="button" className="btn ghost small" onClick={() => onSell(p)}>
-                    판매 🪙{Math.round((p.price || 0) * 0.55).toLocaleString()}
+                    판매 🪙{sellPreview(p).toLocaleString()}
                   </button>
                 </div>
               </div>

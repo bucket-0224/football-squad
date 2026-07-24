@@ -803,20 +803,46 @@ const ENHANCE = {
   costRate: 0.15, // attempt cost ≈ price * costRate * target level
 };
 
-// Boosted view of a card at the given upgrade level (p unchanged when 0).
-function upgraded(p, level) {
+// ---------------------------------------------------------------------------
+// Ultra 등급 진화. 요청: "강화가 5강까지 끝나면 Ultra로 등급 진화 3000크레딧을
+// 소모해서 되게 해주고... 실제 활약한 금액 + 2000 크레딧으로 이적시장 판매가
+// 가능하게 해줘". +5 강화(ENHANCE.maxLevel)를 완료한 카드에 한해, 코인을 더
+// 내고 한 단계 더 강해지는 별도 트랙 — user.upgrades(레벨 0~5)와는 별개로
+// user.ultra(진화 완료한 playerId 배열)에 저장한다("등급"이 바뀌는 것이지
+// upgrades 레벨 자체가 6 이상으로 올라가는 게 아니다 — ENHANCE.maxLevel은
+// 여전히 5강이 상한이고, Ultra는 그 위에 얹는 고정 보너스).
+const ULTRA_BONUS = 2; // +5 강화 위에 추가로 얹는 OVR/능력치 보너스
+const ULTRA_COST = 3000; // 진화 비용(코인)
+
+// Boosted view of a card at the given upgrade level, plus the Ultra evolution
+// bonus on top when ultra is true (p unchanged when level=0 and ultra=false).
+function upgraded(p, level, ultra) {
   const lvl = Math.max(0, Math.min(ENHANCE.maxLevel, level | 0));
-  if (!p || !lvl) return p;
+  const bonus = lvl + (ultra ? ULTRA_BONUS : 0);
+  if (!p || !bonus) return p;
   const attrs = {};
   Object.keys(p.attrs || {}).forEach((k) => {
-    attrs[k] = clamp(p.attrs[k] + lvl, 24, 99);
+    attrs[k] = clamp(p.attrs[k] + bonus, 24, 99);
   });
-  return { ...p, ovr: Math.min(99, p.ovr + lvl), attrs, up: lvl };
+  return { ...p, ovr: Math.min(99, p.ovr + bonus), attrs, up: lvl, ultra: !!ultra };
 }
 
 function enhanceCost(id, level) {
   const price = getPrice(id) || 200; // youth/dynamic fillers have no market price
   return Math.max(50, Math.round(price * ENHANCE.costRate * level));
+}
+
+// Ultra 진화 카드의 이적시장 판매가. 요청대로 "현재 활약한 금액"(=일반 판매
+// 때 쓰는 실적 보너스 포함 공식, index.js의 SELL_RATE*(1+perf))에 진화
+// 보너스 +2000을 더한다. 다만 Ultra로 진화할 만큼 강화를 다 채운 카드는
+// 애초에 뽑기/드로우로 얻은 비-시장 카드인 경우가 많아 getPrice가 null일
+// 수 있다("이적시장에 값을 매길 수 없기 때문에"가 가리키는 바로 그 상황) —
+// 그럴 땐 시세표를 만들 때 쓰는 priceFor와 동일한 곡선을 boosted OVR에
+// 적용해 기준가를 만들어 낸다(경제 밸런스가 시세표와 어긋나지 않도록).
+function ultraSellBase(id, boostedOvr) {
+  const price = getPrice(id);
+  if (price) return price;
+  return priceFor({ ovr: boostedOvr, enhanced: false });
 }
 
 function teamList() {
@@ -950,6 +976,9 @@ module.exports = {
   ENHANCE,
   upgraded,
   enhanceCost,
+  ULTRA_BONUS,
+  ULTRA_COST,
+  ultraSellBase,
   teamList,
   marketList,
   registerDynamicTeam,
