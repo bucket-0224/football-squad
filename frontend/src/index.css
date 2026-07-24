@@ -800,17 +800,19 @@ input:focus, select:focus { border-color: var(--blue); }
 /* ===== packs ===== */
 .packs-intro { margin-bottom: 16px; font-size: 14px; }
 #pack-shelf {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 16px;
+  /* auto-fill 그리드는 좁은 화면에서 한 줄에 2개만 들어가며 5개 팩이
+     2+2+1로 줄바꿈됐다 — 항상 한 줄(가로)로 정렬되게 스크롤 행으로 바꾼다. */
+  display: flex; gap: 16px; overflow-x: auto; padding-bottom: 4px;
 }
 .pack-tile {
   border-radius: 14px; padding: 22px 16px; text-align: center;
   display: flex; flex-direction: column; gap: 8px; align-items: center;
   border: 1px solid var(--border); cursor: pointer;
   transition: transform .15s, filter .15s;
+  flex: 0 0 200px;
 }
 .pack-tile:hover { transform: translateY(-3px); filter: brightness(1.15); }
-.pack-tile .pk-img { width: 84px; height: 84px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
+.pack-tile .pk-img { width: 112px; height: 112px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
 .pack-tile .pk-name { font-weight: 900; font-size: 17px; }
 .pack-tile .pk-desc { font-size: 12px; opacity: .85; }
 .pack-tile .pk-price { font-weight: 800; color: var(--gold); }
