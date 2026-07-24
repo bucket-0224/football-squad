@@ -980,8 +980,26 @@ export class LiveMatchEngine {
     };
 
     if (this.possession !== e.team) {
-      this.takeover(e.team, this.nearest(e.team, this.ball.x, this.ball.y));
+      // 요청("패스를 상대팀이 해서 골을 우리팀이 넣는 경우...그런 경우는
+      // 패스미스로써 처리가 되는게 맞는데 그 빈도가 너무 잦아"): 백엔드
+      // 타임라인은 분 단위로 확정된 이벤트(골/슈팅 등)를 쏘아 보낼 뿐, 그
+      // 순간 화면상 앰비언트(장식용) 점유가 어느 팀에 있었는지는 전혀
+      // 모른다 — 그래서 이 공격 이벤트가 시작될 때 볼이 아직 수비팀 쪽에
+      // 있는 경우가 절반 가까이 생긴다. 예전엔 여기서 아무 설명 없이
+      // this.takeover()로 볼을 그냥 순간이동시켰는데, 그러면 시청자 눈에는
+      // "상대가 패스하다가 갑자기 우리가 골을 넣은"것처럼 보였다(프로
+      // 축구에서는 극히 드문 그림). 실제로는 이 전환이 곧 "우리 팀이 상대
+      // 패스를 끊어낸 것"이라는 뜻이므로, 그걸 침묵의 순간이동이 아니라
+      // 명시적인 "패스 미스/볼 탈취" 대사로 내보내 자연스러운 턴오버처럼
+      // 보이게 한다 — 발생 빈도 자체(대략 절반)는 구조적으로 못 줄이지만,
+      // 최소한 "왜 갑자기 우리 팀이 볼을 잡았는지"는 항상 설명된다.
+      const stealer = this.nearest(e.team, this.ball.x, this.ball.y);
+      this.takeover(e.team, stealer);
       this.passTimer = 0.3;
+      if (stealer) {
+        this.comCd = 0;
+        this.say(`${this.name(stealer)}, 상대 패스를 끊어냅니다 — 패스 미스!`);
+      }
     }
 
     // Sync the on-pitch carrier to whichever sprite the backend actually

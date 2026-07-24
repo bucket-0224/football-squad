@@ -22,7 +22,12 @@ html {
      auto로 가운데 정렬)이 매번 살짝 좌우로 밀렸다 — 실측해 보니 탭마다
      좌우 패딩이 달라 보이던 현상의 원인이 바로 이거였다("스쿼드 탭은
      양옆 패딩이 다르다"는 문제). 스크롤바 자리를 항상 미리 확보해 두면
-     실제로 스크롤이 있든 없든 본문 위치가 흔들리지 않는다. */
+     실제로 스크롤이 있든 없든 본문 위치가 흔들리지 않는다.
+     주의: 이건 Windows Chrome처럼 "공간을 차지하는" 스크롤바가 있는
+     환경에서 실측·검증한 수정이다. iOS Safari/WKWebView(웹클립 앱 포함)는
+     애초에 오버레이 스크롤바라 scrollbar-gutter가 계산상 0이 되므로, 아래
+     아이폰15 전용 버그 리포트(바텀 네비/우측 여백)는 이것과는 무관한
+     별개 원인일 가능성이 높다 — 그래서 밑에 따로 방어 코드를 추가했다. */
   scrollbar-gutter: stable both-edges;
 }
 body {
@@ -35,9 +40,24 @@ body {
      붙는데 body 레이아웃은 더 큰 높이로 계산되면서 "네비가 붕 떠 보이는"
      현상이 생긴다 — 동적 뷰포트 높이(dvh)를 쓰면 실제 보이는 높이를
      따라가므로 이 어긋남이 없어진다. dvh 미지원 브라우저는 위 vh로 폴백.
-     스쿼드 탭처럼 스크롤이 긴 화면에서 특히 눈에 띄던 문제. */
+     스쿼드 탭처럼 스크롤이 긴 화면에서 특히 눈에 띄던 문제.
+     ↑ 이 dvh 수정만으로는 부족했다는 재보고(2026-07): "아이폰15 모바일
+     앱(홈 화면에 추가한 웹클립, standalone)에서 스쿼드 화면을 보면 바텀
+     네비가 다시 그려지는 느낌 + 다른 화면과 달리 아래쪽에 공간이 남아
+     떠 보인다"는 문제가 여전함. 스쿼드 탭이 이 앱에서 가장 긴 스크롤
+     화면이라는 공통점이 있어, 아래 두 가지를 추가로 의심해 볼 수 있다:
+     1) position:fixed 요소(#main-tabs)가 iOS WKWebView에서 스크롤 중
+        자체 컴포지팅 레이어를 못 얻으면 스크롤할 때마다 다시 그려지며
+        미세하게 깜빡이는 것으로 알려진 버그 — GPU 레이어로 강제 승격.
+     2) 스크롤이 긴 페이지에서 iOS의 "고무줄(러버밴드)" 오버스크롤이
+        body 전체를 상하로 튕기면서, 뷰포트에 고정된 #main-tabs가 실제
+        화면 가장자리에서 순간적으로 떨어져 보이는 것으로 알려진 현상 —
+        오버스크롤 바운스 자체를 꺼서 원천 차단.
+     아이폰 실기기로 재현/검증은 이 세션에서 못했다 — 다음 세션에서 그대로
+     재현되면 이 주석부터 다시 읽고 검증할 것. */
   min-height: 100vh;
   min-height: 100dvh;
+  overscroll-behavior-y: none;
 }
 
 .hidden { display: none !important; }
@@ -195,7 +215,17 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 
 /* ===== main layout ===== */
-#view-main { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
+/* overflow-x:hidden 방어 코드: "아이폰15 스쿼드 화면 오른쪽에 공간이 나지
+   않아 중앙 정렬처럼 안 보인다"는 리포트 — 좌우 padding은 16px로 고정돼
+   대칭이어야 정상인데, 실기기로 직접 재현·측정을 못 해서 스쿼드 탭 내부의
+   어떤 요소(카드 그리드/평점바/드래그 고스트 등)가 뷰포트보다 살짝
+   넓어져 오른쪽 padding을 밀어내고 있는 것으로 의심 중이다. 원인 요소를
+   못 찾은 상태라, 최소한 그 초과분이 "페이지가 오른쪽으로 밀리며 우측
+   padding이 사라지는" 형태로 보이지 않게(대신 그냥 잘리게) 막아둔다 —
+   근본 수정은 아니니, 다음 세션에서 실기기로 재현되면 Safari 원격 디버거
+   (Mac + 케이블)로 실제 스크롤폭(scrollWidth vs clientWidth)을 먼저 재서
+   어떤 요소가 넘치는지부터 특정할 것. */
+#view-main { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; overflow-x: hidden; }
 #topbar {
   display: flex; justify-content: space-between; align-items: center;
   /* viewport-fit=cover(모바일 앱/iOS 웹클립)에서는 페이지가 상태바 아래까지
@@ -257,6 +287,14 @@ input:focus, select:focus { border-color: var(--blue); }
     margin-bottom: 0; gap: 0;
     padding: 4px 2px calc(4px + env(safe-area-inset-bottom, 0px));
     box-shadow: 0 -4px 12px rgba(0,0,0,.35);
+    /* 아이폰15 웹클립 앱에서 스쿼드 탭처럼 긴 화면을 스크롤할 때 이
+       position:fixed 바가 다시 그려지는(깜빡이는) 느낌이 든다는 리포트 —
+       자체 컴포지팅 레이어로 강제 승격해 두면 스크롤 중 페인트를 새로
+       다시 계산하지 않고 그대로 유지된다(iOS WKWebView의 잘 알려진
+       position:fixed 리페인트 완화책). body { overscroll-behavior-y:none }
+       과 함께 적용 — 위 body 규칙 옆 주석 참고. */
+    transform: translateZ(0);
+    will-change: transform;
   }
   #main-tabs button {
     flex: 1 1 0; flex-direction: column; gap: 2px;
@@ -1163,8 +1201,14 @@ input:focus, select:focus { border-color: var(--blue); }
 /* ===== 주장/부주장 ===== */
 .captain-toolbar { align-items: center; gap: 8px; margin-top: 8px; }
 .captain-toolbar select { flex: 1; min-width: 0; }
+/* 요청: "캡틴 마크를 오른쪽 상단에 카드에 뱃지 형태로 C, VC를 만들어줘"
+   — 원래 top-left(.fc-head, OVR/POS/클럽로고가 있는 자리)와 겹쳐 보였던
+   문제를 피하려고 top-right로 옮김. .fc-flag(선발 등)도 top-right를 쓰지만
+   badge(SquadTab/OpponentSquadModal의 피치 카드)와 flag(OwnedList/Picker/
+   MarketTab)는 현재 같은 카드에 동시에 전달되는 곳이 없어 겹치지 않는다 —
+   나중에 두 prop을 같은 카드에 함께 쓰게 되면 이 가정이 깨지니 주의. */
 .fc-cap-badge {
-  position: absolute; top: 5px; left: 6px; z-index: 1;
+  position: absolute; top: 5px; right: 6px; z-index: 1;
   background: var(--gold); color: #111; font-size: 9px; font-weight: 900;
   border-radius: 4px; padding: 2px 5px;
 }

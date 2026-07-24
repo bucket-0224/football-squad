@@ -3,7 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- 요청: "스쿼드 화면에서 처음에 확대되어서 보여" (아이폰15, 홈 화면에
+         추가한 웹클립 standalone 앱) — 스쿼드가 로그인 후 첫 화면이라 가장
+         먼저 눈에 띄었을 뿐, 사실은 앱을 처음 여는 그 순간 전체가 확대된
+         채로 시작되는 문제로 보인다. iOS WebKit standalone 앱이 launch 시
+         뷰포트 배율을 잘못 계산해 확대된 채로 뜨는 건 잘 알려진 버그이고,
+         maximum-scale/user-scalable로 배율을 아예 1로 고정하는 게 표준
+         우회법이다 — 이 앱은 핀치줌이 필요한 콘텐츠(지도/이미지 열람 등)가
+         없어 확대 자체를 막아도 기능상 잃는 게 없다. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#0d1117" />
     <!-- iOS Safari는 web manifest의 상당수를 무시하므로 홈 화면 추가(웹클립)
          동작을 위한 애플 전용 메타/아이콘을 별도로 지정해야 한다. -->

@@ -214,16 +214,23 @@ function attach(server) {
         break;
       }
       case 'spectate_list': {
-        // running matches anyone can watch
-        const matches = [...live.values()].map((c) => ({
-          id: c.id,
-          mode: c.mode,
-          home: c.home.name,
-          away: c.away.name,
-          minute: c.minute,
-          display: displayMinute(c.minute),
-          score: c.score,
-        }));
+        // running matches anyone can watch — 요청: "매치 프리뷰에서는 바로
+        // 관전을 띄우지 말고, 프리뷰에서 시작을 누른 경우만 관전을 띄워야해".
+        // ctx는 심판 프리뷰가 뜬 시점(runMatch)에 이미 live에 등록되지만
+        // ctx.interval은 beginTicking()이 실제로 호출돼야만 생긴다 — 그
+        // 전(당사자가 아직 "시작"을 안 누른 상태)엔 목록에서 감춰서 관전자가
+        // 텅 빈/0분 경기를 먼저 발견하고 들어오는 일이 없게 한다.
+        const matches = [...live.values()]
+          .filter((c) => c.interval)
+          .map((c) => ({
+            id: c.id,
+            mode: c.mode,
+            home: c.home.name,
+            away: c.away.name,
+            minute: c.minute,
+            display: displayMinute(c.minute),
+            score: c.score,
+          }));
         send(ws, { type: 'spectate_list', matches });
         break;
       }
@@ -231,6 +238,11 @@ function attach(server) {
         if (playing.has(ws.userId))
           return send(ws, { type: 'error', error: '경기 중에는 관전할 수 없습니다.' });
         const ctx = live.get(msg.matchId);
+        // 목록(spectate_list)에서 감춘 것과 같은 이유로 join도 막는다 —
+        // 목록 갱신 사이의 타이밍에 매치ID를 알아내 직접 join 시도하는
+        // 경우까지 막아야 하므로 여기서도 다시 확인한다.
+        if (ctx && !ctx.interval)
+          return send(ws, { type: 'error', error: '아직 시작 전인 경기입니다. 잠시 후 다시 시도해 주세요.' });
         if (!ctx)
           return send(ws, { type: 'error', error: '경기를 찾을 수 없습니다. 이미 종료되었을 수 있습니다.' });
         removeFromQueue(ws);
@@ -570,6 +582,11 @@ function attach(server) {
     ctx.id = 'g' + crypto.randomBytes(4).toString('hex');
     ctx.spectators = new Set();
     ctx.startMsg = startMsg;
+    // live에는 심판 프리뷰가 뜨는 이 시점(아직 ctx.interval 없음)에 바로
+    // 등록한다 — 당사자 소켓 조회/정리(leaveSpectate 등)가 이 ctx를 곧바로
+    // 찾을 수 있어야 하기 때문. 대신 관전 목록/입장(spectate_list, spectate
+    // 핸들러)은 ctx.interval 유무로 따로 걸러서, 프리뷰에서 "시작"을 누르기
+    // 전까지는 다른 유저에게 노출되지 않게 한다.
     live.set(ctx.id, ctx);
     if (home.user) active.set(home.user.id, ctx);
     if (away.user) active.set(away.user.id, ctx);
