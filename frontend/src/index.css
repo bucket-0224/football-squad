@@ -773,7 +773,7 @@ input:focus, select:focus { border-color: var(--blue); }
   transition: transform .15s, filter .15s;
 }
 .pack-tile:hover { transform: translateY(-3px); filter: brightness(1.15); }
-.pack-tile .pk-emoji { font-size: 40px; }
+.pack-tile .pk-img { width: 84px; height: 84px; object-fit: contain; filter: drop-shadow(0 4px 10px rgba(0,0,0,.4)); }
 .pack-tile .pk-name { font-weight: 900; font-size: 17px; }
 .pack-tile .pk-desc { font-size: 12px; opacity: .85; }
 .pack-tile .pk-price { font-weight: 800; color: var(--gold); }

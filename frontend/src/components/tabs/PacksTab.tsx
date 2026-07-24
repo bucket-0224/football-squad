@@ -13,12 +13,12 @@ interface PackResult {
   refund: number;
 }
 
-const PACK_META: Record<string, { emoji: string; desc: string; cls: string }> = {
-  bronze: { emoji: '🥉', desc: 'OVR 79 이하', cls: 'pack-bronze' },
-  silver: { emoji: '🥈', desc: 'OVR 78~85', cls: 'pack-silver' },
-  gold: { emoji: '🥇', desc: 'OVR 84 이상', cls: 'pack-gold' },
-  special: { emoji: '💎', desc: 'OVR 86+ · 강화 카드 확률 UP', cls: 'pack-special' },
-  icon: { emoji: '👑', desc: '레전드 아이콘 카드 확정', cls: 'pack-icon' },
+const PACK_META: Record<string, { img: string; desc: string; cls: string }> = {
+  bronze: { img: '/img/packs/bronze.png', desc: 'OVR 79 이하', cls: 'pack-bronze' },
+  silver: { img: '/img/packs/silver.png', desc: 'OVR 78~85', cls: 'pack-silver' },
+  gold: { img: '/img/packs/gold.png', desc: 'OVR 84 이상', cls: 'pack-gold' },
+  special: { img: '/img/packs/special.png', desc: 'OVR 86+ · 강화 카드 확률 UP', cls: 'pack-special' },
+  icon: { img: '/img/packs/icon.png', desc: '레전드 아이콘 카드 확정', cls: 'pack-icon' },
 };
 
 const SPARK_COLORS = ['#ffd76e', '#ff7a7a', '#7ab8ff', '#9dff8a', '#e19bff'];
@@ -52,10 +52,10 @@ export default function PacksTab() {
       <div id="pack-shelf">
         {bootstrap.packs.map((pk) => {
           const p = pk as { id: string; name: string; price: number };
-          const meta = PACK_META[p.id] || { emoji: '🎁', desc: '', cls: '' };
+          const meta = PACK_META[p.id] || { img: '', desc: '', cls: '' };
           return (
             <div className={'pack-tile ' + meta.cls} key={p.id}>
-              <span className="pk-emoji">{meta.emoji}</span>
+              {meta.img && <img className="pk-img" src={meta.img} alt="" />}
               <span className="pk-name">{p.name}</span>
               <span className="pk-desc">{meta.desc}</span>
               <span className="pk-price">🪙 {p.price.toLocaleString()}</span>
