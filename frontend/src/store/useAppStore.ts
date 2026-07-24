@@ -68,7 +68,7 @@ interface AppState {
   resolveTransferRequest: (
     requestId: string,
     choice: 'keep' | 'release'
-  ) => Promise<{ released: boolean; devotion?: number }>;
+  ) => Promise<{ released: boolean; devotion?: number; coinsGained?: number }>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   setAvatar: (imageDataUrl: string) => Promise<void>;
   clearAvatar: () => Promise<void>;
@@ -218,12 +218,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   resolveTransferRequest: async (requestId, choice) => {
-    const r = await api.post<{ user: User; released: boolean; devotion?: number }>(
+    const r = await api.post<{ user: User; released: boolean; devotion?: number; coinsGained?: number }>(
       '/api/transfer-request/resolve',
       { requestId, choice }
     );
     set({ me: r.user });
-    return { released: r.released, devotion: r.devotion };
+    return { released: r.released, devotion: r.devotion, coinsGained: r.coinsGained };
   },
 
   changePassword: async (currentPassword, newPassword) => {

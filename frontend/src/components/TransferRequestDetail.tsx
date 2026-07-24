@@ -9,11 +9,21 @@ export default function TransferRequestDetail({ request, onClose }: { request: T
   if (!me) return null;
   const p = catalog.get(request.playerId);
   const card = p ? upgradedCard(me, p) : undefined;
+  // 서버의 resolveTransferRequest와 동일한 공식(득점*3%+도움*2%, 최대 50%)을
+  // 그대로 미리 보여준다 — 버튼을 누르기 전에 대략 얼마를 받는지 알아야 한다.
+  const st = me.playerStats[request.playerId] || { goals: 0, assists: 0 };
+  const perf = Math.min(0.5, (st.goals || 0) * 0.03 + (st.assists || 0) * 0.02);
+  const estimatedPayout = p?.price ? Math.round(p.price * (1 + perf) * 0.95) : null;
 
   const choose = async (choice: 'keep' | 'release') => {
     try {
       const r = await resolveTransferRequest(request.id, choice);
-      toast(r.released ? `${p ? p.name + ' 선수가' : '선수가'} 팀을 떠났습니다.` : '선수를 잔류시켰습니다. 헌신도가 회복되었습니다.');
+      if (r.released) {
+        const coins = r.coinsGained ? ` · 🪙${r.coinsGained.toLocaleString()} 획득` : '';
+        toast(`${p ? p.name + ' 선수가' : '선수가'} 팀을 떠났습니다.${coins}`);
+      } else {
+        toast('선수를 잔류시켰습니다. 헌신도가 회복되었습니다.');
+      }
       onClose();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));
@@ -46,7 +56,7 @@ export default function TransferRequestDetail({ request, onClose }: { request: T
                 잔류시키기
               </button>
               <button type="button" className="btn" onClick={() => choose('release')}>
-                이적 허용 (보상 없음)
+                이적 허용{estimatedPayout ? ` (🪙${estimatedPayout.toLocaleString()})` : ''}
               </button>
             </div>
           </div>

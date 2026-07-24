@@ -112,11 +112,12 @@ function normalizeUser(u) {
   return u;
 }
 
-// Increment a per-player cumulative stat (goals/assists) on a user, creating
-// the entry if this is the player's first recorded contribution.
+// Increment a per-player cumulative stat (goals/assists/appearances) on a
+// user, creating the entry if this is the player's first recorded stat.
 function bumpPlayerStat(user, playerId, field) {
   if (!playerId) return;
-  if (!user.playerStats[playerId]) user.playerStats[playerId] = { goals: 0, assists: 0 };
+  if (!user.playerStats[playerId]) user.playerStats[playerId] = { goals: 0, assists: 0, appearances: 0 };
+  if (typeof user.playerStats[playerId][field] !== 'number') user.playerStats[playerId][field] = 0;
   user.playerStats[playerId][field]++;
 }
 

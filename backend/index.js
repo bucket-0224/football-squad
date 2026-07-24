@@ -607,7 +607,12 @@ app.post('/api/transfer-request/resolve', auth.authMiddleware, (req, res) => {
   const r = devotion.resolveTransferRequest(req.user, requestId, choice);
   if (r.error) return bad(res, r.status, r.error);
   store.putUser(req.user);
-  res.json({ user: sanitizeUser(req.user), released: r.released, devotion: r.devotion });
+  res.json({
+    user: sanitizeUser(req.user),
+    released: r.released,
+    devotion: r.devotion,
+    coinsGained: r.coinsGained,
+  });
 });
 
 // ---- 우편함 ------------------------------------------------------------------

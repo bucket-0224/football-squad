@@ -609,6 +609,13 @@ function attach(server) {
           store.bumpPlayerStat(u, e.playerId, 'goals');
           if (e.assistId) store.bumpPlayerStat(u, e.assistId, 'assists');
         });
+      // 출전 횟수 — 불만/이적요청 로직(devotion.js)이 "실제로 얼마나 뛰었는지"를
+      // 판단할 근거가 되므로 실제 그 경기에 나선 스쿼드(main/pvp) 기준으로
+      // 정확히 집계한다. 유스(빈 슬롯)는 null이라 이미 걸러진다.
+      const squadUsed = squads[teamSide];
+      (squadUsed && squadUsed.starters ? squadUsed.starters : []).filter(Boolean).forEach((pid) => {
+        store.bumpPlayerStat(u, pid, 'appearances');
+      });
       store.putUser(u);
       return { outcome, coins, points, balance: u.coins };
     };

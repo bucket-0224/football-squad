@@ -1,6 +1,7 @@
 'use strict';
 
 const store = require('./store');
+const players = require('./data/players');
 
 // Player 불만(complaint) -> 대화 선택 -> 헌신도(devotion) system.
 // Each issue has one "satisfying" choice (bigger devotion gain) and one or
@@ -35,12 +36,22 @@ const ISSUES = [
   },
 ];
 
-const CHECK_COOLDOWN_MS = 3 * 60 * 1000; // at most one roll per 3 real minutes — keeps notifications arriving often enough that the game feels "live"
-const RAISE_CHANCE = 0.9; // high — the 3-min cooldown is what paces things, not this roll
+const CHECK_COOLDOWN_MS = 10 * 60 * 1000; // at most one roll per 10 real minutes
+const RAISE_CHANCE = 0.9; // high — the cooldown is what paces things, not this roll
 const MAX_PENDING = 5; // stop rolling new ones once this many are unread
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// "출전시간 불만" 후보: 보유 중이지만 실제 출전 횟수가 하위권인 선수 —
+// matchmaking.js가 매 경기 종료 시 실제 선발 명단 기준으로 채우는
+// playerStats[id].appearances 를 근거로 삼는다(전적 무관한 완전 랜덤이 아님).
+function pickLowAppearancePlayer(owned, playerStats) {
+  const withApps = owned.map((id) => ({ id, apps: (playerStats[id] && playerStats[id].appearances) || 0 }));
+  withApps.sort((a, b) => a.apps - b.apps);
+  const bottomHalf = withApps.slice(0, Math.max(1, Math.ceil(withApps.length / 2)));
+  return bottomHalf[Math.floor(Math.random() * bottomHalf.length)].id;
 }
 
 // Opportunistically roll a new complaint for one user. Driven by the cron
@@ -48,20 +59,52 @@ function clamp(v, lo, hi) {
 // not the user is logged in. Complaints stack (a player raising one doesn't
 // block another from doing the same) so the user clears them individually
 // from a notification list instead of a single blocking popup.
+//
+// Which issue fires — and who it targets — is grounded in real per-user
+// data rather than a uniform random pick:
+//   - "playtime" only fires if there's an actual bench to be unhappy about,
+//     and targets whoever's genuinely played the least (appearances).
+//   - "results" only fires once the team has an actual losing record
+//     (>=3 games played, >=40% losses), targeting a current starter.
+//   - "ambition" has no real-world signal to gate on, so it stays the
+//     always-eligible fallback (matches the original behavior).
 function maybeRaiseComplaint(user) {
   if (user.complaints.length >= MAX_PENDING) return;
   const now = Date.now();
   if (now - (user.lastComplaintCheck || 0) < CHECK_COOLDOWN_MS) return;
   user.lastComplaintCheck = now;
   if (Math.random() >= RAISE_CHANCE) return;
+
+  const owned = (user.owned || []).filter(Boolean);
+  if (!owned.length) return;
   const starters = (user.squad.starters || []).filter(Boolean);
-  if (!starters.length) return;
-  const playerId = starters[Math.floor(Math.random() * starters.length)];
-  const issue = ISSUES[Math.floor(Math.random() * ISSUES.length)];
+  const playerStats = user.playerStats || {};
+  const record = user.record || { w: 0, d: 0, l: 0 };
+  const totalGames = (record.w || 0) + (record.d || 0) + (record.l || 0);
+  const lossRate = totalGames ? (record.l || 0) / totalGames : 0;
+
+  const resultsEligible = totalGames >= 3 && lossRate >= 0.4 && starters.length > 0;
+  const playtimeEligible = owned.length >= 3; // need an actual bench to compare against
+
+  const pool = [];
+  if (playtimeEligible) pool.push('playtime');
+  if (resultsEligible) pool.push('results');
+  pool.push('ambition');
+
+  const issueId = pool[Math.floor(Math.random() * pool.length)];
+  let playerId;
+  if (issueId === 'playtime') {
+    playerId = pickLowAppearancePlayer(owned, playerStats);
+  } else if (issueId === 'results') {
+    playerId = starters[Math.floor(Math.random() * starters.length)];
+  } else {
+    playerId = owned[Math.floor(Math.random() * owned.length)];
+  }
+
   user.complaints.push({
     id: 'c' + Math.random().toString(36).slice(2, 10),
     playerId,
-    issue: issue.id,
+    issue: issueId,
     createdAt: now,
   });
 }
@@ -102,7 +145,7 @@ function resolveComplaint(user, complaintId, choiceId) {
   return { satisfied: !!choice.satisfies, devotion: user.devotion[playerId] };
 }
 
-const SWEEP_INTERVAL_MS = 60 * 1000; // finer than CHECK_COOLDOWN_MS so the per-user cooldown, not tick granularity, governs odds
+const SWEEP_INTERVAL_MS = 2 * 60 * 1000; // finer than CHECK_COOLDOWN_MS so the per-user cooldown, not tick granularity, governs odds
 
 // ---------------------------------------------------------------------------
 // 이적 요청 (transfer request): a player whose devotion has cratered asks to
@@ -110,7 +153,9 @@ const SWEEP_INTERVAL_MS = 60 * 1000; // finer than CHECK_COOLDOWN_MS so the per-
 // complaints, since by this point goodwill is already gone.
 // ---------------------------------------------------------------------------
 const TRANSFER_REQUEST_DEVOTION_THRESHOLD = 15;
-const TRANSFER_REQUEST_CHANCE = 0.05; // per critically-low player, gated by CHECK_COOLDOWN_MS like complaints
+const TRANSFER_REQUEST_CHANCE = 0.05; // fallback path: devotion cratered without 2 stacked complaints
+const COMPLAINT_ESCALATION_COUNT = 2; // this many unresolved complaints on one player escalates to a real request
+const ESCALATED_TRANSFER_CHANCE = 0.85; // high — this is meant to reliably fire, not be a rare roll
 
 function maybeRaiseTransferRequest(user) {
   if (!Array.isArray(user.owned) || !user.owned.length) return;
@@ -119,6 +164,28 @@ function maybeRaiseTransferRequest(user) {
   if (now - (user.lastTransferCheck || 0) < CHECK_COOLDOWN_MS) return;
   user.lastTransferCheck = now;
   const pending = new Set(user.transferRequests.map((r) => r.playerId));
+
+  // 주된 경로: 같은 선수 불만이 COMPLAINT_ESCALATION_COUNT번 이상 쌓이면
+  // ("문제가 2번 연속으로 쌓이면") 실제로 이적 요청이 발생한다.
+  const complaintCounts = {};
+  for (const c of user.complaints) complaintCounts[c.playerId] = (complaintCounts[c.playerId] || 0) + 1;
+  const escalated = Object.keys(complaintCounts).filter(
+    (id) => complaintCounts[id] >= COMPLAINT_ESCALATION_COUNT && !pending.has(id) && user.owned.includes(id)
+  );
+  if (escalated.length) {
+    if (Math.random() < ESCALATED_TRANSFER_CHANCE) {
+      const playerId = escalated[Math.floor(Math.random() * escalated.length)];
+      user.transferRequests.push({
+        id: 't' + Math.random().toString(36).slice(2, 10),
+        playerId,
+        createdAt: now,
+      });
+    }
+    return;
+  }
+
+  // 폴백 경로: 불만이 2건까진 안 쌓였어도 헌신도 자체가 완전히 바닥난 경우 —
+  // 낮은 확률로 유지 (기존 동작).
   const candidates = user.owned.filter(
     (id) => (user.devotion[id] ?? 60) < TRANSFER_REQUEST_DEVOTION_THRESHOLD && !pending.has(id)
   );
@@ -127,14 +194,15 @@ function maybeRaiseTransferRequest(user) {
   user.transferRequests.push({
     id: 't' + Math.random().toString(36).slice(2, 10),
     playerId,
-    createdAt: Date.now(),
+    createdAt: now,
   });
 }
 
 // 'keep' (잔류): devotion resets to a moderate baseline, request cleared.
-// 'release' (이적 허용): player leaves outright — no coin compensation, a
-// clean release, mirrors /api/market/sell's roster/slot-vacating logic minus
-// the payout.
+// 'release' (이적 허용): player leaves — paid out at (market price adjusted
+// for real goal/assist contribution) minus a flat 5%, the same
+// contribution-aware formula /api/market/sell uses, just discounted less
+// (95% vs a normal sale's 55%) since the club didn't choose to let them go.
 function resolveTransferRequest(user, requestId, choice) {
   const list = user.transferRequests || [];
   const idx = list.findIndex((r) => r.id === requestId);
@@ -146,6 +214,12 @@ function resolveTransferRequest(user, requestId, choice) {
     return { released: false, devotion: 50 };
   }
   if (choice === 'release') {
+    const price = players.getPrice(playerId) || 0;
+    const st = user.playerStats[playerId] || { goals: 0, assists: 0 };
+    const perf = Math.min(0.5, (st.goals || 0) * 0.03 + (st.assists || 0) * 0.02);
+    const coinsGained = Math.round(price * (1 + perf) * 0.95);
+    user.coins += coinsGained;
+
     user.owned = user.owned.filter((id) => id !== playerId);
     user.drawn = user.drawn.filter((id) => id !== playerId);
     if (user.upgrades) delete user.upgrades[playerId];
@@ -155,7 +229,7 @@ function resolveTransferRequest(user, requestId, choice) {
     delete user.devotion[playerId];
     user.complaints = (user.complaints || []).filter((c) => c.playerId !== playerId);
     list.splice(idx, 1);
-    return { released: true };
+    return { released: true, coinsGained };
   }
   return { error: '알 수 없는 선택입니다.', status: 400 };
 }
@@ -187,6 +261,7 @@ module.exports = {
   init,
   sweep,
   maybeRaiseComplaint,
+  maybeRaiseTransferRequest,
   publicComplaints,
   resolveComplaint,
   resolveTransferRequest,
