@@ -245,6 +245,35 @@ function tacticOf(squad) {
   return squad && TACTICS[squad.tactic] ? squad.tactic : 'balanced';
 }
 
+// ===== 오프사이드(실제 라인 기반 판정) =====
+// 요청: "만약 현재 랜덤 오프사이드 선언이면, 하프 라인 이후에 우리팀 선수가
+// 상대팀 최종 수비수보다 뒤에 있다면 오프사이드 선언 및 VAR 역시 동일한
+// 기준 적용... 상대팀도 동일한 기준을 적용" — 예전엔 정확히 이 "랜덤"이었다
+// (addGoals와 완전히 분리된 별도 함수가 xG에 비례한 18% 고정 확률로 그냥
+// "취소된 골" 이벤트를 얹었을 뿐, 실제로 어떤 골 시도와도 연결되지 않았다).
+// 다만 이 백엔드 시뮬레이션 자체가 분 단위 확률 이벤트만 계산할 뿐 실제
+// x/y 좌표를 전혀 추적하지 않는다(좌표 기반 오프사이드는 프론트
+// liveMatchEngine.ts의 offsideCheck가 이미 하고 있지만, 그건 이벤트 사이를
+// 채우는 장식용 앰비언트 패스에만 적용되고 실제 득점 여부를 좌우하지
+//않는다 — 백엔드가 이미 확정한 결과를 보여줄 뿐이라 좌표를 몰라도 된다).
+// 그래서 여기서는 "완전한 좌표 시뮬레이션"이 아니라, 팀의 라인 높이(전술)와
+// 그 라인을 다루는 능력치(수비 DEF ↔ 침투하는 공격진 ATT)를 견주는 방식으로
+// "그 순간 마지막 수비수보다 앞서 있었는가"를 판정한다 — 수비 라인이
+// 높을수록(압박 전술) 오프사이드 트랩이 성립할 상황 자체가 많아지고, 공격이
+// 침투 지향적일수록(공격적/역습) 그 라인 뒤 위험한 타이밍의 패스를 더 자주
+// 시도한다. 이제 이 판정은 addGoals 안에서 실제로 만들어지려던 골 하나하나에
+// 대해 이뤄지므로(아래 addGoals 참고), "그 골이 진짜 오프사이드였는지"를
+// 판정하는 것이지 별개로 얹는 장식이 아니다 — 홈/원정 양쪽에 완전히 동일한
+// 함수로 적용되어 편파적이지 않다.
+const LINE_HEIGHT = { attacking: 70, balanced: 0, defensive: -60, counter: -40 };
+function isOffsideRun(atkTactic, defTactic, atkRatings, defRatings) {
+  const atkLine = LINE_HEIGHT[atkTactic] ?? 0;
+  const defLine = LINE_HEIGHT[defTactic] ?? 0;
+  let p = 0.05 + Math.max(0, defLine - atkLine + 60) / 700;
+  p += (defRatings.DEF - atkRatings.ATT) / 900;
+  return Math.random() < clamp(p, 0.02, 0.32);
+}
+
 // --- match simulation ------------------------------------------------------
 
 function scorerFor(ratings, excludeId, opts = {}) {
@@ -588,6 +617,32 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
       const via = r < 0.12 ? 'penalty' : r < 0.18 ? 'freekick' : r < 0.18 + cornerShare ? 'corner' : null;
       const excludeId = excludeAt(side, minute);
 
+      // 오프사이드(VAR 취소) — 페널티킥은 오프사이드 규정 대상이 아니고,
+      // 코너킥도 IFAB 규정상 코너킥으로 직접 득점 시 오프사이드가 성립하지
+      // 않는다. isOffsideRun은 위에서 정의한, 라인 높이(전술) + 관련
+      // 능력치(수비 DEF ↔ 공격 ATT) 기반의 실제 판정 — 이 골 시도 자체가
+      // "그 순간 마지막 수비수보다 앞서 있었는가"로 취소되는 것이지, 이
+      // 시도와 무관한 별도 확률이 아니다. 취소되면 이 골은 스코어에 전혀
+      // 반영되지 않고(아래 return으로 이번 시도 전체를 여기서 끝냄) 'goal'이
+      // 아닌 'disallowed' 이벤트만 남는다.
+      const defTactic = side === 'home' ? tacAway : tacHome;
+      const atkTactic = side === 'home' ? tacHome : tacAway;
+      if (via !== 'penalty' && via !== 'corner' && isOffsideRun(atkTactic, defTactic, ratings, oppRatings)) {
+        const scorer = scorerFor(ratings, excludeId);
+        events.push({
+          minute,
+          type: 'disallowed',
+          team: side,
+          player: scorer.name,
+          playerId: scorer.id,
+          assist: null,
+          assistId: null,
+          via: null,
+          text: `${scorer.name}의 골... VAR 판독 결과 오프사이드 — 득점 취소!`,
+        });
+        return;
+      }
+
       // 자책골: 페널티는 대상에서 제외(키커가 직접 넣는 상황이라 자책골이
       // 나올 수 없다). 득점은 side(수혜팀) 스코어보드에 그대로 붙지만,
       // playerId는 일부러 비워서(스탯 집계는 store.bumpPlayerStat이
@@ -644,35 +699,14 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   };
   addGoals(goalsHome, 'home', home, 'away', away);
   addGoals(goalsAway, 'away', away, 'home', home);
-
-  // 오프사이드(VAR 취소): 실제 스코어는 그대로 두고, 그 팀의 공격력(xG)에
-  // 비례해 "취소된 득점"을 얹는다 — 이전엔 xG와 무관한 4% 고정 확률이라
-  // 거의 공격을 못 한 팀에도 뜬금없이 취소골이 떴었다.
-  const OFFSIDE_RATE = 0.18;
-  const addOffsides = (xgVal, side, ratings) => {
-    const usedMinutes = new Set(
-      events.filter((e) => e.team === side && e.type === 'goal').map((e) => e.minute)
-    );
-    const n = poisson(xgVal * frac * OFFSIDE_RATE);
-    uniqueMinutes(n, fromMinute + 1)
-      .filter((m) => !usedMinutes.has(m))
-      .forEach((minute) => {
-        const scorer = scorerFor(ratings, excludeAt(side, minute));
-        events.push({
-          minute,
-          type: 'disallowed',
-          team: side,
-          player: scorer.name,
-          playerId: scorer.id,
-          assist: null,
-          assistId: null,
-          via: null,
-          text: `${scorer.name}의 골... VAR 판독 결과 오프사이드 — 득점 취소!`,
-        });
-      });
-  };
-  addOffsides(xgHomeAdj, 'home', home);
-  addOffsides(xgAwayAdj, 'away', away);
+  // 오프사이드(VAR 취소)는 이제 addGoals 안에서 골 시도 하나하나에 대해
+  // isOffsideRun으로 직접 판정된다(위 addGoals 내부 주석 참고) — 예전엔
+  // 여기 별도의 addOffsides(xG 비례 고정 확률)가 실제 골 시도와 무관하게
+  // "취소된 골" 이벤트를 얹었는데, 그게 정확히 사용자가 지적한 "랜덤 오프
+  // 사이드"였다. goalsHome/goalsAway 중 몇 개가 실제로 오프사이드로
+  // 취소됐는지는 이 시점에 알 수 없으므로(콜백 내부에서 결정됨), 최종
+  // 스코어는 더 이상 goalsHome/goalsAway를 그대로 쓰지 않고 아래 timeline
+  // 순회에서 실제로 집계된 sh/sa를 쓴다.
 
   events.sort((a, b) => a.minute - b.minute || (a.type === 'goal' ? -1 : 1));
 
@@ -722,7 +756,11 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     tactics: { home: tacHome, away: tacAway },
     possession: { home: Math.round(possHome * 100), away: Math.round(possAway * 100) },
     xg: { home: Number(xgHomeAdj.toFixed(2)), away: Number(xgAwayAdj.toFixed(2)) },
-    score: { home: base.home + goalsHome, away: base.away + goalsAway },
+    // sh/sa(위 timeline 순회에서 실제 'goal' 이벤트만 센 값)를 최종 스코어로
+    // 쓴다 — base.home + goalsHome처럼 Poisson으로 뽑힌 "시도 횟수"를 그대로
+    // 쓰면 addGoals 안에서 오프사이드로 취소된 시도까지 득점으로 잡혀
+    // 스코어보드와 타임라인이 서로 어긋난다.
+    score: { home: sh, away: sa },
     timeline,
   };
 }
