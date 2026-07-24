@@ -372,7 +372,7 @@ export default function SquadTab() {
           <RatingsBar ratings={ratings} />
           <RolePicker squad={squad} catalog={catalog} roles={bootstrap.roles} />
         </div>
-        <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} onDragStart={beginDrag} />
+        <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} />
       </div>
       {pickerSlot !== null && (
         <PickerModal slotIndex={pickerSlot} pos={slots[pickerSlot]} onClose={() => setPickerSlot(null)} />
