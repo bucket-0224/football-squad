@@ -1,16 +1,18 @@
 import { useAppStore } from '../store/useAppStore';
 import { toast } from '../store/useToastStore';
-import { activePoolIds, activeSquad, fitClass, posPenalty, slotLineOf, upgradedCard } from '../game/cards';
+import { activePoolIds, activeSquad, slotLineOf, upgradedCard } from '../game/cards';
+import { bandPenalty, fitByBand, type Band } from '../game/bands';
 import PlayerCard from './PlayerCard';
 import type { CatalogPlayer } from '../types';
 
 interface PickerModalProps {
   slotIndex: number;
   pos: string;
+  band: Band;
   onClose: () => void;
 }
 
-export default function PickerModal({ slotIndex, pos, onClose }: PickerModalProps) {
+export default function PickerModal({ slotIndex, pos, band, onClose }: PickerModalProps) {
   const { me, squadMode, catalog, saveSquad } = useAppStore();
   if (!me) return null;
 
@@ -74,8 +76,8 @@ export default function PickerModal({ slotIndex, pos, onClose }: PickerModalProp
             <p className="dim">{line === 'GK' ? '배치 가능한 골키퍼가 없습니다.' : '배치 가능한 선수가 없습니다.'}</p>
           )}
           {owned.map((p) => {
-            const [cls, label] = fitClass(p.line, line);
-            const pen = posPenalty(p, pos);
+            const [cls, label] = fitByBand(p.pos, band);
+            const pen = bandPenalty(p.pos, band);
             const inSlot = squad.starters.indexOf(p.id);
             const shown = pen ? { ...p, ovr: Math.max(30, p.ovr - pen) } : p;
             return (

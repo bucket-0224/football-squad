@@ -232,8 +232,18 @@ input:focus, select:focus { border-color: var(--blue); }
   #owned-list { max-height: none; overflow-y: visible; }
 }
 
-.pitch-toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
-.pitch-toolbar select { flex: 1; }
+.pitch-toolbar { display: flex; gap: 8px; margin-bottom: 8px; }
+.pitch-toolbar select { flex: 1; min-width: 0; }
+.pitch-actions { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.pitch-actions .btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+
+/* 모바일: 버튼 3개(베스트 XI 추천/배치 편집/위치 초기화)가 한 줄에 다 안
+   들어가면 억지로 욱여넣어 글자가 잘리는 대신, 자연스럽게 다음 줄로 넘어가게
+   한다 — flex-basis를 %로 고정해 줄바꿈 지점을 예측 가능하게 만든다. */
+@media (max-width: 480px) {
+  .pitch-actions .btn { font-size: 12px; padding: 8px 6px; flex-basis: calc(50% - 4px); }
+  #formation-select, #tactic-select { font-size: 13px; }
+}
 
 #pitch, #oppo-pitch {
   position: relative;
@@ -282,6 +292,14 @@ input:focus, select:focus { border-color: var(--blue); }
 .slot.pos-dragging { cursor: grabbing; z-index: 20; box-shadow: 0 0 0 2px var(--gold); }
 .slot.pos-dragging .slot-assign { cursor: grabbing; }
 .pos-edit-hint { margin: -4px 0 10px; }
+/* 배치 편집 중 이 슬롯이 지금 몇 선(밴드)인지 보여주는 작은 라벨 —
+   OVR이 왜 깎이는지(또는 안 깎이는지) 바로 이해할 수 있게 한다. */
+.slot-band-tag {
+  position: absolute; bottom: -4px; left: 50%; transform: translateX(-50%);
+  font-size: 9px; font-weight: 800; color: #fff; background: rgba(20,20,30,.85);
+  border: 1px solid rgba(255,255,255,.4); border-radius: 999px; padding: 1px 6px;
+  white-space: nowrap; pointer-events: none;
+}
 
 /* 드래그 중 포인터를 따라다니는 카드 미리보기 — elementFromPoint로 놓을
    위치를 판단해야 하므로 pointer-events는 반드시 꺼둔다 */

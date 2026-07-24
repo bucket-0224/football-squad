@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
-import { activeRatings, activeSquad, convertedCard, upgradedCard } from '../../game/cards';
+import { activeRatings, activeSquad, upgradedCard } from '../../game/cards';
 import { COORDS } from '../../game/formationCoords';
+import { BAND_LABEL, bandOfY, convertedCardByBand } from '../../game/bands';
 import PlayerCard, { EmptySlotCard } from '../PlayerCard';
 import OwnedList from '../OwnedList';
 import PickerModal from '../PickerModal';
@@ -415,6 +416,8 @@ export default function SquadTab() {
                 </option>
               ))}
             </select>
+          </div>
+          <div className="pitch-actions">
             <button type="button" className="btn small" onClick={onAuto}>
               베스트 XI 추천
             </button>
@@ -466,6 +469,7 @@ export default function SquadTab() {
               const badge = id && id === squad.captain ? 'C' : id && id === squad.viceCaptain ? 'VC' : undefined;
               const [bx, by] = coords[i] || [50, 50];
               const [x, y] = draftCoord && draftCoord.i === i ? [draftCoord.x, draftCoord.y] : [bx, by];
+              const band = pos === 'GK' ? 5 : bandOfY(y);
               return (
                 <div
                   key={i}
@@ -490,8 +494,9 @@ export default function SquadTab() {
                       else if (!posMode && p) beginDrag(p.id, p, e.clientX, e.clientY);
                     }}
                   >
-                    {p ? <PlayerCard player={convertedCard(p, pos)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
+                    {p ? <PlayerCard player={convertedCardByBand(p, band)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
                   </button>
+                  {posMode && <span className="slot-band-tag">{BAND_LABEL[band]}</span>}
                   {p && (
                     <button
                       type="button"
@@ -512,7 +517,12 @@ export default function SquadTab() {
         <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} />
       </div>
       {pickerSlot !== null && (
-        <PickerModal slotIndex={pickerSlot} pos={slots[pickerSlot]} onClose={() => setPickerSlot(null)} />
+        <PickerModal
+          slotIndex={pickerSlot}
+          pos={slots[pickerSlot]}
+          band={slots[pickerSlot] === 'GK' ? 5 : bandOfY((coords[pickerSlot] || [50, 50])[1])}
+          onClose={() => setPickerSlot(null)}
+        />
       )}
       {enhanceId && <EnhanceModal playerId={enhanceId} onClose={() => setEnhanceId(null)} />}
       {clubChangeOpen && <ClubChangeModal onClose={() => setClubChangeOpen(false)} />}
