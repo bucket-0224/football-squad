@@ -158,12 +158,21 @@ function resolveTransferRequest(user, requestId, choice) {
 }
 
 // Real cron sweep (mirrors season.js's init/setInterval shape) over every
-// user in the store, independent of anyone polling /api/me.
+// user in the store, independent of anyone polling /api/me. Each user is
+// isolated in its own try/catch: an uncaught exception inside a setInterval
+// callback kills the entire Node process, so one malformed record must
+// never be able to take down live matches/every other user's traffic along
+// with it (store.js's load() already backfills missing fields, but this is
+// the last line of defense against anything unforeseen).
 function sweep() {
   for (const user of store.allUsers()) {
-    maybeRaiseComplaint(user);
-    maybeRaiseTransferRequest(user);
-    store.putUser(user);
+    try {
+      maybeRaiseComplaint(user);
+      maybeRaiseTransferRequest(user);
+      store.putUser(user);
+    } catch (err) {
+      console.error('[devotion] sweep failed for user', user && user.id, err);
+    }
   }
 }
 

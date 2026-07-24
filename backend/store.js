@@ -28,6 +28,20 @@ function load() {
     if (!db.matches) db.matches = [];
     if (!db.season) db.season = { number: 1, startedAt: Date.now() };
     if (!db.seasonHistory) db.seasonHistory = [];
+    // per-user migration guard: accounts created before a field existed
+    // (complaints/transferRequests/devotion/mailbox all postdate the
+    // original schema) would otherwise be missing it entirely — and an
+    // unguarded consumer like the cron sweep in devotion.js reading
+    // `.length` off `undefined` takes the whole process down, repeatedly,
+    // every tick, until the record is fixed. Patch every loaded user once
+    // here instead of relying on every call site to defend for itself.
+    Object.values(db.users).forEach((u) => {
+      if (!Array.isArray(u.complaints)) u.complaints = [];
+      if (!Array.isArray(u.transferRequests)) u.transferRequests = [];
+      if (!u.devotion || typeof u.devotion !== 'object') u.devotion = {};
+      if (!Array.isArray(u.mailbox)) u.mailbox = [];
+      if (typeof u.lastComplaintCheck !== 'number') u.lastComplaintCheck = 0;
+    });
   } catch (err) {
     db = JSON.parse(JSON.stringify(DEFAULT_DB));
     flushNow();
