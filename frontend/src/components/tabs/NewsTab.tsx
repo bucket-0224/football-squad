@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../api/client';
 import { toast } from '../../store/useToastStore';
+import NewsDetailModal from '../NewsDetailModal';
 import type { MatchRecord } from '../../types';
 
 // 매치당 하나의 리포트 형식(속보/영상/라디오)을 매치 id로 결정 — 새로고침해도
@@ -44,6 +45,7 @@ function newsBlurb(
 
 export default function NewsTab() {
   const [matches, setMatches] = useState<MatchRecord[]>([]);
+  const [detail, setDetail] = useState<MatchRecord | null>(null);
 
   useEffect(() => {
     api
@@ -78,17 +80,19 @@ export default function NewsTab() {
           const loserName = winner === 'home' ? away : winner === 'away' ? home : null;
           const blurb = newsBlurb(m, fmt, winnerName, loserName);
           return (
-            <div className="news-item" key={m.id}>
+            <div className="news-item" key={m.id} onClick={() => setDetail(m)}>
               <div className="news-head">
                 <span className={`news-badge ${fmt.cls}`}>{fmt.tag}</span>
                 <span className="news-date">{new Date(m.at).toLocaleString()}</span>
               </div>
               <div className="news-teams">{teams}</div>
               <div className="news-blurb">{blurb}</div>
+              <div className="news-detail-hint dim small-text">📊 상세보기</div>
             </div>
           );
         })}
       </div>
+      {detail && <NewsDetailModal match={detail} onClose={() => setDetail(null)} />}
     </div>
   );
 }
