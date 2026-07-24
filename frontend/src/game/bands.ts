@@ -1,7 +1,9 @@
 // 자유 배치(포지션 드래그) 도입 이후, 카드의 OVR 적합도는 더 이상 포메이션이
 // 정해준 슬롯 라벨(예: "이 슬롯은 RB다")이 아니라 실제로 피치 위 어디에 놓였는지
-// (몇 "선"인지)로 판정한다. 5선 체계 — 골키퍼(5선)는 항상 고정이라 여기서 다루는
-// 밴드 판정 대상이 아니다(SquadTab의 GK 잠금 로직 참고).
+// (몇 "선"인지)로 판정한다. 5선 체계 — 5선은 골키퍼 전용이다. 골키퍼 슬롯 자체는
+// SquadTab에서 드래그가 막혀 있어 실제로 5선에 서는 건 항상 GK뿐이지만, 판정
+// 공식 자체는 GK를 특별 취급하지 않고 다른 포지션과 동일하게 "홈 밴드까지의
+// 거리"로 계산한다(아래 bandPenalty 주석 참고).
 //
 //   1선(최전방): LW, ST, CF, RW
 //   2선(공격형 미드필드): LW, RW, LM, RM, CAM, CM
@@ -13,11 +15,12 @@
 // 윙어와 중앙 미드필더는 그 정도 폭으로 자리를 잡기 때문.
 export type Band = 1 | 2 | 3 | 4 | 5;
 
-const BAND_POSITIONS: Record<1 | 2 | 3 | 4, string[]> = {
+const BAND_POSITIONS: Record<Band, string[]> = {
   1: ['LW', 'RW', 'ST', 'CF'],
   2: ['LW', 'RW', 'LM', 'RM', 'CAM', 'CM'],
   3: ['CDM', 'LWB', 'RWB', 'CM'],
   4: ['LB', 'CB', 'RB'],
+  5: ['GK'],
 };
 
 export const BAND_LABEL: Record<Band, string> = {
@@ -38,14 +41,18 @@ export function bandOfY(y: number): Band {
   return 1;
 }
 
-function homeBands(pos: string): (1 | 2 | 3 | 4)[] {
-  const homes = ([1, 2, 3, 4] as const).filter((b) => BAND_POSITIONS[b].includes(pos));
+function homeBands(pos: string): Band[] {
+  const homes = ([1, 2, 3, 4, 5] as const).filter((b) => BAND_POSITIONS[b].includes(pos));
   return homes.length ? homes : [3]; // 알 수 없는 포지션 코드는 중간대로 취급(안전장치)
 }
 
 // 밴드 사이 거리 기반 페널티 — 0(그 밴드에 맞음) · 6(한 칸 차이) · 10(두 칸) · 14(그 이상).
+// GK를 특별 취급하지 않는다 — GK의 홈 밴드는 5뿐이라 이 공식만으로 이미
+// 정확히 처리된다. 예전엔 "band===5면 무조건 0"으로 예외 처리했는데, 그러면
+// 골키퍼가 아닌 선수를 5선(y<10) 깊숙이 끌어놔도 페널티가 전혀 안 붙는 버그가
+// 있었다 — 골키퍼 슬롯 자체는 어차피 드래그로 못 옮기니 5선에 실제로 서는
+// 건 항상 GK뿐이고, 다른 포지션이 거기 놓이면 정상적으로 큰 페널티가 붙어야 한다.
 export function bandPenalty(pos: string, band: Band): number {
-  if (pos === 'GK' || band === 5) return 0; // GK는 항상 5선 고정, 여기서 다루지 않는다
   const dist = Math.min(...homeBands(pos).map((h) => Math.abs(h - band)));
   if (dist <= 0) return 0;
   if (dist === 1) return 6;

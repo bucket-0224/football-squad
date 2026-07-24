@@ -24,7 +24,7 @@ export default function TeamCard({
         ) : (
           <span className="team-dot" style={{ background: team.color || '#3b82f6' }} />
         )}
-        {team.name}
+        <span className="t-name-text">{team.name}</span>
       </span>
       <span className="t-meta">
         {team.dyn ? '클럽 · 실제 스쿼드' : `${team.type === 'club' ? '클럽' : '국가대표'} · OVR ${team.ovr}`}

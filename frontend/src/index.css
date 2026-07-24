@@ -99,10 +99,6 @@ input:focus, select:focus { border-color: var(--blue); }
 #auth-form { display: flex; flex-direction: column; gap: 10px; }
 .pick-label { font-size: 13px; font-weight: 700; margin-top: 6px; }
 .pick-hint { color: var(--dim); font-weight: 400; }
-#team-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 8px; max-height: 260px; overflow-y: auto; padding: 2px;
-}
 .manager-style-row { display: flex; gap: 8px; }
 .manager-style-row select { flex: 1; }
 .team-card {
@@ -110,11 +106,76 @@ input:focus, select:focus { border-color: var(--blue); }
   background: var(--panel2); cursor: pointer; text-align: left;
   color: var(--text); /* buttons don't inherit — team names were black */
   display: flex; flex-direction: column; gap: 4px;
+  /* 그리드/플렉스 아이템은 기본 min-width:auto라 "Bournemouth"처럼 안 끊기는
+     단어가 하나만 있어도 칸이 억지로 넓어지며 그리드 전체가 가로로 밀린다 —
+     min-width:0 + break-word로 칸 너비 안에서 줄바꿈되게 한다. */
+  min-width: 0; overflow-wrap: break-word;
 }
 .team-card.selected { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
-.team-card .t-name { font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px; }
+.team-card .t-name {
+  font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px;
+  min-width: 0; overflow-wrap: break-word;
+}
+.team-card .t-name img, .team-card .team-dot { flex-shrink: 0; }
+.team-card .t-name-text { min-width: 0; overflow-wrap: break-word; }
 .team-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .team-card .t-meta { font-size: 12px; color: var(--dim); }
+
+/* ===== 회원가입 단계별 위저드(토스 스타일: 한 화면에 질문 하나씩) ===== */
+.auth-card-wizard { padding: 28px 32px; }
+.wizard-head { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+.wizard-back {
+  background: none; border: none; color: var(--dim); font-size: 22px;
+  line-height: 1; padding: 4px 8px; cursor: pointer; border-radius: 8px;
+}
+.wizard-back:hover { color: var(--text); background: var(--panel2); }
+.wizard-progress { display: flex; gap: 6px; flex: 1; }
+.wizard-dot { flex: 1; height: 4px; border-radius: 999px; background: var(--panel2); }
+.wizard-dot.done { background: var(--green); }
+.wizard-step { display: flex; flex-direction: column; gap: 4px; }
+.wizard-question { font-size: 21px; font-weight: 800; line-height: 1.35; margin: 0; }
+.wizard-sub { color: var(--dim); font-size: 13px; margin: 0 0 18px; }
+.wizard-input {
+  width: 100%; font-size: 16px; padding: 14px; border-radius: 10px;
+  background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+  margin-bottom: 22px; box-sizing: border-box;
+}
+.wizard-cta { width: 100%; padding: 14px; font-size: 15px; margin-top: 18px; }
+.wizard-cta:disabled { opacity: .5; cursor: not-allowed; }
+
+.team-grid-4col {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px;
+}
+@media (max-width: 480px) {
+  .team-grid-4col { grid-template-columns: repeat(2, 1fr); }
+  .auth-card-wizard { padding: 22px 18px; }
+}
+
+.wizard-intro { align-items: center; text-align: center; padding-top: 8px; }
+.wizard-intro-icon { font-size: 42px; margin-bottom: 6px; }
+.wizard-intro .wizard-sub { max-width: 380px; }
+.wizard-intro .manager-style-row { width: 100%; margin-bottom: 4px; }
+
+.wizard-preparing {
+  align-items: center; text-align: center; padding: 24px 0 12px;
+  gap: 6px;
+}
+.wizard-spinner {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 3px solid var(--panel2); border-top-color: var(--green);
+  animation: wizard-spin 0.9s linear infinite; margin-bottom: 18px;
+}
+@keyframes wizard-spin { to { transform: rotate(360deg); } }
+.wizard-preparing .wizard-question { margin-bottom: 14px; }
+.wizard-tip {
+  color: var(--dim); font-size: 13px; line-height: 1.6; max-width: 400px;
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 16px; margin: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wizard-spinner { animation: none; border-top-color: var(--panel2); }
+}
 
 /* ===== main layout ===== */
 #view-main { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; }
