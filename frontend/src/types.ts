@@ -177,6 +177,20 @@ export interface LeaderboardRow {
   ovr: number;
 }
 
+export interface TopScorerRow {
+  username: string;
+  clubName: string;
+  playerId: string;
+  goals: number;
+}
+
+export interface TopAssisterRow {
+  username: string;
+  clubName: string;
+  playerId: string;
+  assists: number;
+}
+
 export interface MatchLineupPlayer {
   id: string | null;
   name: string;
@@ -252,5 +266,6 @@ export interface OpponentSquadView {
   starterDetails: (CatalogPlayer | null)[];
   captain: string | null;
   viceCaptain: string | null;
+  slotCoords?: ([number, number] | null)[] | null;
   ratings: Ratings;
 }

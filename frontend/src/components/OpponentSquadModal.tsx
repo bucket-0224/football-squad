@@ -3,6 +3,7 @@ import { api } from '../api/client';
 import { useAppStore } from '../store/useAppStore';
 import { toast } from '../store/useToastStore';
 import { COORDS } from '../game/formationCoords';
+import { convertedCardByBand, slotPositionLabel } from '../game/bands';
 import PlayerCard, { EmptySlotCard } from './PlayerCard';
 import type { OpponentSquadView, User } from '../types';
 
@@ -30,7 +31,11 @@ export default function OpponentSquadModal({ username, onClose }: { username: st
   if (!view || !bootstrap) return null;
 
   const slotPos = bootstrap.formations[view.formation] || [];
-  const coords = COORDS[view.formation] || COORDS['4-3-3'];
+  const baseCoords = COORDS[view.formation] || COORDS['4-3-3'];
+  const coords: [number, number][] =
+    view.slotCoords && view.slotCoords.length === baseCoords.length
+      ? view.slotCoords.map((c, i) => c || baseCoords[i] || [50, 50])
+      : baseCoords;
 
   const copyStrategy = async () => {
     try {
@@ -96,7 +101,11 @@ export default function OpponentSquadModal({ username, onClose }: { username: st
             const badge = pid && pid === view.captain ? 'C' : pid && pid === view.viceCaptain ? 'VC' : undefined;
             return (
               <div key={i} className="slot" style={{ left: x + '%', bottom: y + '%' }} title={p ? (roleLabel ? `${p.name} · ${roleLabel}` : p.name) : undefined}>
-                {p ? <PlayerCard player={p} size="xs" badge={badge} /> : <EmptySlotCard pos={slotPos[i] || ''} />}
+                {p ? (
+                  <PlayerCard player={convertedCardByBand(p, x, y)} size="xs" badge={badge} />
+                ) : (
+                  <EmptySlotCard pos={slotPos[i] === 'GK' ? 'GK' : slotPositionLabel(x, y)} />
+                )}
               </div>
             );
           })}

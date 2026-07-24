@@ -76,6 +76,12 @@ app.use((req, res, next) => {
   next();
 });
 
+// 프로필 사진은 계정 설정에서 언제든 새로 올라오는 진짜 런타임 데이터라,
+// 마지막 배포 시점의 스냅샷인 프론트엔드 정적 빌드(frontend/dist)로는
+// 다음 배포 전까지 절대 반영되지 않는다(깨진 이미지로 보이던 원인) —
+// 항상 떠 있는 백엔드가 이 폴더를 직접 서빙해 업로드 즉시 보이게 한다.
+app.use('/img/avatars', express.static(account.AVATAR_DIR));
+
 // ---- helpers ---------------------------------------------------------------
 
 function ratingSummary(squad) {
@@ -807,6 +813,7 @@ app.get('/api/user/:username/squad', auth.authMiddleware, (req, res) => {
     starterDetails: squad.starters.map((id) => (id ? players.publicPlayer(id) : null)),
     captain: squad.captain || null,
     viceCaptain: squad.viceCaptain || null,
+    slotCoords: squad.slotCoords || null,
     ratings: ratingSummary(withUpgrades(target, squad)),
   });
 });
@@ -826,6 +833,29 @@ app.get('/api/leaderboard', (req, res) => {
     .sort((a, b) => b.points - a.points || b.record.w - a.record.w || b.ovr - a.ovr)
     .slice(0, 50);
   res.json({ leaderboard: rows });
+});
+
+// 전체 유저 통틀어 득점/도움 상위 기록 — 개인별(TopPerformersSub, RankTab.tsx)이
+// 아니라 서버 전체 기준 "지금 누가 득점왕/도움왕인지"용. 같은 카탈로그
+// 선수를 여러 유저가 보유해도 합산하지 않고 (유저, 선수) 조합별로 따로
+// 집계한다 — "이 유저의 이 카드가 몇 골 넣었는지"가 실제로 의미 있는 단위라서.
+app.get('/api/top-performers', (req, res) => {
+  const scorers = [];
+  const assisters = [];
+  Object.values(store.get().users).forEach((u) => {
+    Object.entries(u.playerStats || {}).forEach(([playerId, s]) => {
+      if (!players.getPlayer(playerId)) return; // stale entry for a player no longer in the catalog
+      if (s.goals) {
+        scorers.push({ username: u.username, clubName: u.clubName, playerId, goals: s.goals });
+      }
+      if (s.assists) {
+        assisters.push({ username: u.username, clubName: u.clubName, playerId, assists: s.assists });
+      }
+    });
+  });
+  scorers.sort((a, b) => b.goals - a.goals);
+  assisters.sort((a, b) => b.assists - a.assists);
+  res.json({ scorers: scorers.slice(0, 20), assisters: assisters.slice(0, 20) });
 });
 
 // ---- fallthrough -----------------------------------------------------------

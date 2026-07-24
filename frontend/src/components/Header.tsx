@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { avatarSrc } from '../config';
 import MailboxModal from './MailboxModal';
 import NotificationsModal from './NotificationsModal';
 import AccountSettingsModal from './AccountSettingsModal';
@@ -9,6 +10,13 @@ export default function Header() {
   const [mailOpen, setMailOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const src = me ? avatarSrc(me.avatarUrl) : null;
+  // src가 바뀌면(새로 업로드 등) 이전에 깨졌었다는 상태를 지워서 새 이미지를
+  // 다시 시도할 기회를 준다 — 안 그러면 한 번 깨진 뒤로는 계속 이니셜만 보임.
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [src]);
   if (!me) return null;
 
   const unclaimed = (me.mailbox || []).filter((m) => !m.claimed).length;
@@ -17,8 +25,8 @@ export default function Header() {
   return (
     <header id="topbar">
       <div className="club-info">
-        {me.avatarUrl ? (
-          <img className="hdr-avatar" src={me.avatarUrl} alt="" />
+        {src && !avatarBroken ? (
+          <img className="hdr-avatar" src={src} alt="" onError={() => setAvatarBroken(true)} />
         ) : (
           <span className="hdr-avatar hdr-avatar-placeholder">{me.username.slice(0, 1).toUpperCase()}</span>
         )}

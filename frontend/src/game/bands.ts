@@ -73,7 +73,7 @@ export function fitByBand(pos: string, band: Band): [string, string] {
 //
 // 좌/우 끝(farLeft·farRight)은 윙어·풀백처럼 완전히 폭이 넓은 자리(LM/RM,
 // LB/RB, LWB/RWB, LW/RW)로 분리하고, 그보다 안쪽(left·right)은 "중앙에
-// 두 명이 나란히 서는" 자리(LCM/RCM, LCB/RCB, LCDM/RCDM, LST/RST)로 잡는다.
+// 두 명이 나란히 서는" 자리(LCM/RCM, LCB/RCB, LDM/RDM, LST/RST)로 잡는다.
 // 정중앙(center)은 그 라인에 한 명만 있을 때의 자리(CM 계열은 CAM, 나머지는
 // 각 라인의 기본형)다. 실제 포메이션 좌표(예: 4-3-3의 CM 3명 = 72/50/28,
 // 4-3-3의 CB 2명 = 63/37)를 기준으로 경계값을 잡아, 프리셋을 그대로 두면
@@ -83,7 +83,7 @@ type Zone = 'farLeft' | 'left' | 'center' | 'right' | 'farRight';
 const ZONE_LABEL: Record<1 | 2 | 3 | 4, Record<Zone, string>> = {
   1: { farLeft: 'LW', left: 'LST', center: 'ST', right: 'RST', farRight: 'RW' },
   2: { farLeft: 'LM', left: 'LCM', center: 'CAM', right: 'RCM', farRight: 'RM' },
-  3: { farLeft: 'LWB', left: 'LCDM', center: 'CDM', right: 'RCDM', farRight: 'RWB' },
+  3: { farLeft: 'LWB', left: 'LDM', center: 'CDM', right: 'RDM', farRight: 'RWB' },
   4: { farLeft: 'LB', left: 'LCB', center: 'CB', right: 'RCB', farRight: 'RB' },
 };
 

@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
+import { avatarSrc } from '../config';
 import { toast } from '../store/useToastStore';
 
 const MAX_AVATAR_BYTES = 3 * 1024 * 1024;
@@ -22,6 +23,11 @@ export default function AccountSettingsModal({ onClose }: { onClose: () => void 
   const [newPassword2, setNewPassword2] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
   const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarBroken, setAvatarBroken] = useState(false);
+  const src = me ? avatarSrc(me.avatarUrl) : null;
+  useEffect(() => {
+    setAvatarBroken(false);
+  }, [src]);
 
   if (!me) return null;
 
@@ -104,8 +110,8 @@ export default function AccountSettingsModal({ onClose }: { onClose: () => void 
           <h4>프로필 사진</h4>
           <div className="account-avatar-row">
             <div className="account-avatar-preview">
-              {me.avatarUrl ? (
-                <img src={me.avatarUrl} alt="" />
+              {src && !avatarBroken ? (
+                <img src={src} alt="" onError={() => setAvatarBroken(true)} />
               ) : (
                 <span className="account-avatar-placeholder">{me.username.slice(0, 1).toUpperCase()}</span>
               )}

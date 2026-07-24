@@ -7,9 +7,9 @@ import PlayerCard from '../PlayerCard';
 import HexChart from '../HexChart';
 import OpponentSquadModal from '../OpponentSquadModal';
 import MatchDetailModal from '../MatchDetailModal';
-import type { LeaderboardRow, MatchRecord, SeasonHistoryEntry, SeasonStatus } from '../../types';
+import type { LeaderboardRow, MatchRecord, SeasonHistoryEntry, SeasonStatus, TopAssisterRow, TopScorerRow } from '../../types';
 
-type SubTab = 'board' | 'top' | 'perf';
+type SubTab = 'board' | 'top' | 'perf' | 'hof';
 
 export default function RankTab() {
   const [sub, setSub] = useState<SubTab>('board');
@@ -24,6 +24,9 @@ export default function RankTab() {
         <button type="button" className={sub === 'top' ? 'active' : ''} onClick={() => setSub('top')}>
           득점왕 · 도움왕
         </button>
+        <button type="button" className={sub === 'hof' ? 'active' : ''} onClick={() => setSub('hof')}>
+          명예의 전당
+        </button>
         <button type="button" className={sub === 'perf' ? 'active' : ''} onClick={() => setSub('perf')}>
           팀 성적
         </button>
@@ -33,6 +36,9 @@ export default function RankTab() {
       </div>
       <div className="rank-sub" style={{ display: sub === 'top' ? undefined : 'none' }}>
         {sub === 'top' && <TopPerformersSub />}
+      </div>
+      <div className="rank-sub" style={{ display: sub === 'hof' ? undefined : 'none' }}>
+        {sub === 'hof' && <HallOfFameSub />}
       </div>
       <div className="rank-sub" style={{ display: sub === 'perf' ? undefined : 'none' }}>
         {sub === 'perf' && <TeamRecordSub />}
@@ -209,6 +215,76 @@ function TopPerformersSub() {
     <div className="top-performers">
       <PerfCard title="득점왕" icon="👑" entry={scorer} />
       <PerfCard title="도움왕" icon="🎯" entry={assister} />
+    </div>
+  );
+}
+
+// TopPerformersSub은 "내" 스쿼드 안에서의 개인 최다 기록이고, 이건 서버
+// 전체를 통틀어 지금 누가 득점왕/도움왕인지 보여준다 — 같은 카탈로그
+// 선수를 여러 유저가 보유해도 합산하지 않고 (유저, 선수) 조합별로 순위를
+// 매긴다("이 유저의 이 카드가 몇 골"이 실제 의미 있는 단위라서).
+function HallOfFameSub() {
+  const { me, catalog } = useAppStore();
+  const [scorers, setScorers] = useState<TopScorerRow[]>([]);
+  const [assisters, setAssisters] = useState<TopAssisterRow[]>([]);
+
+  useEffect(() => {
+    api
+      .get<{ scorers: TopScorerRow[]; assisters: TopAssisterRow[] }>('/api/top-performers')
+      .then((r) => {
+        setScorers(r.scorers);
+        setAssisters(r.assisters);
+      })
+      .catch((err) => toast(err instanceof Error ? err.message : String(err)));
+  }, []);
+
+  if (!me) return null;
+
+  const Row = ({
+    rank,
+    row,
+    stat,
+  }: {
+    rank: number;
+    row: { username: string; clubName: string; playerId: string };
+    stat: number;
+  }) => {
+    const p = catalog.get(row.playerId);
+    return (
+      <li key={row.username + row.playerId} style={row.username === me.username ? { color: 'var(--gold)' } : undefined}>
+        <span>
+          #{rank} {p ? p.name : row.playerId}{' '}
+          <span className="dim small-text">
+            ({row.clubName} · {row.username})
+          </span>
+        </span>
+        <span>{stat}</span>
+      </li>
+    );
+  };
+
+  return (
+    <div className="team-grid">
+      <div className="team-block">
+        <h4>👑 전체 득점왕</h4>
+        <ol className="mini-board">
+          {scorers.length ? (
+            scorers.map((r, i) => <Row key={r.username + r.playerId} rank={i + 1} row={r} stat={r.goals} />)
+          ) : (
+            <li className="dim">아직 기록이 없습니다.</li>
+          )}
+        </ol>
+      </div>
+      <div className="team-block">
+        <h4>🎯 전체 도움왕</h4>
+        <ol className="mini-board">
+          {assisters.length ? (
+            assisters.map((r, i) => <Row key={r.username + r.playerId} rank={i + 1} row={r} stat={r.assists} />)
+          ) : (
+            <li className="dim">아직 기록이 없습니다.</li>
+          )}
+        </ol>
+      </div>
     </div>
   );
 }
