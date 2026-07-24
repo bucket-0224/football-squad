@@ -76,14 +76,17 @@ export default function MatchTab({ visible }: { visible: boolean }) {
   const [poolKind, setPoolKind] = useState<'owned' | 'drawn'>('owned');
   const [pauseSel, setPauseSel] = useState<number | null>(null);
 
-  const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const matchTacticNamesRef = useRef({ home: '', away: '' });
 
-  const showBanner = (text: string, kind: string, ms?: number) => {
+  // 요청: "필드 아래에... 사라지지 않고 항상 중계 메세지가 새로 갱신되도록" —
+  // 예전엔 ms(기본 2200) 뒤 자동으로 setBanner(null)해서 사라졌는데, 그게
+  // 골문 앞 혼잡 장면을 가리는 배너가 있다가도 없다가도 하며 화면이
+  // 깜빡이는 느낌을 줬다. 이제 배너는 캔버스 "아래"(겹치지 않음)에 항상
+  //떠 있고, 다음 메세지가 올 때까지 마지막 내용을 그대로 유지한다 — 엔진이
+  // 넘겨주는 ms(대략 이 정도 보여주라는 힌트)는 더 이상 쓰지 않는다.
+  const showBanner = (text: string, kind: string) => {
     if (!text) return;
-    if (bannerTimerRef.current) clearTimeout(bannerTimerRef.current);
     setBanner({ text, kind, token: Date.now() });
-    bannerTimerRef.current = setTimeout(() => setBanner(null), ms || 2200);
   };
 
   const engineRef = useRef<LiveMatchEngine | null>(null);
@@ -94,7 +97,7 @@ export default function MatchTab({ visible }: { visible: boolean }) {
       onPossession: (homePct) => setPossHomePct(homePct),
       // 채팅 목록 대신 매 이벤트를 단일 라인 토스트로 흘려보낸다 (타입별 색상)
       onFeedItem: (minute, text, type) => showBanner((minute ? minute + ' ' : '') + text, FEED_KIND[type] || 'info'),
-      onBanner: (text, kind, ms) => showBanner(text, kind, ms),
+      onBanner: (text, kind) => showBanner(text, kind),
       onResult: (msg) => handleResult(msg),
     });
   }
@@ -504,8 +507,8 @@ export default function MatchTab({ visible }: { visible: boolean }) {
         <div className="match-stage">
           <div className="pitch-wrap">
             <LiveMatchCanvas engine={engine} />
-            <div id="event-banner" key={banner?.token} className={banner ? `eb-${banner.kind} show` : ''}>
-              {banner?.text}
+            <div id="event-banner" key={banner?.token} className={banner ? `eb-${banner.kind}` : 'eb-info'}>
+              {banner?.text || ' '}
             </div>
           </div>
           <div id="pause-panel" className={pausePanelOpen ? '' : 'disabled'} style={{ display: spectating ? 'none' : undefined }}>

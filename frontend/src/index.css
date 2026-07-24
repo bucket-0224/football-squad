@@ -737,23 +737,27 @@ input:focus, select:focus { border-color: var(--blue); }
 .match-stage #pitch2d { margin: 0 auto; }
 .pitch-wrap { position: relative; }
 
-/* FM 스타일 이벤트 배너: 전술판 위에 겹쳐지는 한 줄 토스트.
-   .show가 붙은 순간 위에서 살짝 내려오며 페이드인, 사라질 때 페이드아웃. */
+/* FM 스타일 이벤트 배너 — 요청: "시뮬레이션 필드 안에서 지금 중계 메세지가
+   나와서 지금 골대 혼잡 상황에서 경기가 안 보이니까... 필드 아래에 조금
+   공간을 두고 사라지지 않고 항상 중계 메세지가 새로 갱신되도록". 예전엔
+   전술판(캔버스) 위에 겹치는 position:absolute 배너였고, 몇 초 뒤
+   페이드아웃되며 사라졌다 — 골문 앞 혼잡한 장면을 배너가 가려서 정작
+   중요한 순간을 못 보게 되는 문제. .pitch-wrap의 position:relative에서
+   의도적으로 빠져나와 캔버스 다음에 오는 일반 흐름 요소로 바꿔서, 캔버스
+   "아래"에 자기 자리를 갖게 하고(더는 겹치지 않음), 사라지는 로직 자체를
+   없애 항상 최신 메세지가 그대로 보이게 한다(showBanner의 자동 숨김
+   타이머 제거 — MatchTab.tsx 참고).*/
 #event-banner {
-  position: absolute; top: 10px; left: 50%;
-  transform: translate(-50%, -14px);
-  max-width: calc(100% - 24px);
+  margin-top: 8px;
+  max-width: 100%;
   padding: 8px 18px; border-radius: 999px;
   font-weight: 800; font-size: 13px; text-align: center; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
   background: var(--panel2); color: var(--text);
   border: 1px solid var(--border);
   box-shadow: 0 6px 18px rgba(0,0,0,.45);
-  opacity: 0; pointer-events: none;
-  transition: opacity .25s ease, transform .25s ease;
   z-index: 5;
 }
-#event-banner.show { opacity: 1; transform: translate(-50%, 0); }
 #event-banner.eb-goal { background: linear-gradient(135deg, var(--gold), #f0d78a); color: #2b2007; border-color: var(--gold); }
 #event-banner.eb-red { background: var(--red); color: #fff; border-color: var(--red); }
 #event-banner.eb-yellow { background: #e8c341; color: #2b2007; border-color: #e8c341; }
