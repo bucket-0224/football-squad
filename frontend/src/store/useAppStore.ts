@@ -13,6 +13,8 @@ interface RegisterPayload {
   clubName: string;
   team: string;
   dyn: boolean; // team came from the live league-teams fetch, not the curated list
+  preferredFormation?: string;
+  preferredTactic?: string;
 }
 
 export interface SquadPatch {

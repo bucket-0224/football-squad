@@ -134,27 +134,28 @@ function clampPct(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// backend/game/formations.js의 LINE 테이블과 동일 — 포지션 라벨을 넓은 라인으로 묶는다.
-const LINE_OF: Record<string, 'DEF' | 'MID' | 'ATT'> = {
-  CB: 'DEF', LB: 'DEF', RB: 'DEF', LWB: 'DEF', RWB: 'DEF',
-  CDM: 'MID', CM: 'MID', CAM: 'MID', LM: 'MID', RM: 'MID',
-  LW: 'ATT', RW: 'ATT', CF: 'ATT', ST: 'ATT',
-};
+// 좌표(y%, 골키퍼 제외) 오름차순 목록을 "라인"으로 묶어 인원수 배열로 만든다
+// — 값 사이 간격이 GAP_THRESHOLD(%p)를 넘으면 새 라인 시작. 예:
+// [17,17,22,22, 38,38, 58, 64,64, 82] -> [4,2,3,1] (="4-2-3-1").
+// COORDS의 프리셋 좌표 자체에 대해 돌려도 그 포메이션의 이름과 정확히 같은
+// 배열이 나오도록 실측 좌표 간격에 맞춰 값을 골랐다(5개 포메이션 전부 확인).
+const GAP_THRESHOLD = 10;
 
-// COORDS의 실제 y값 분포(수비 17~22 / 미드 34~58 / 공격 64~82)에서 뜬 간격의
-// 중간값 — 자유 배치 후 어느 라인에 몇 명이 있는지 셀 때 쓰는 경계.
-const DEF_MID_BOUND = 28;
-const MID_ATT_BOUND = 61;
-
-function formationSignature(posList: string[]): [number, number, number] {
-  let d = 0, m = 0, a = 0;
-  for (const pos of posList) {
-    const line = LINE_OF[pos];
-    if (line === 'DEF') d++;
-    else if (line === 'MID') m++;
-    else if (line === 'ATT') a++;
+function clusterLineCounts(ys: number[]): number[] {
+  const sorted = [...ys].sort((a, b) => a - b);
+  const bands: number[] = [];
+  let count = 0;
+  let prev: number | null = null;
+  for (const y of sorted) {
+    if (prev !== null && y - prev > GAP_THRESHOLD) {
+      bands.push(count);
+      count = 0;
+    }
+    count++;
+    prev = y;
   }
-  return [d, m, a];
+  if (count > 0) bands.push(count);
+  return bands;
 }
 
 export default function SquadTab() {
@@ -284,23 +285,24 @@ export default function SquadTab() {
     saveSquad({ slotCoords: null }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
   };
 
-  // 배치 편집을 끝낼 때, 자유롭게 옮긴 위치를 기준으로 라인별(수비/미드/공격)
-  // 인원수를 다시 세서 가장 가까운 포메이션 이름을 스피너에 반영한다 — 골키퍼는
-  // 항상 slots[0]이라 라인 집계에서 제외(=이동 대상에서도 제외, 아래 onPointerDown 참고).
+  // 배치 편집을 끝낼 때, 자유롭게 옮긴 위치를 라인 단위로 다시 묶어(골키퍼
+  // 제외) "4-2-3-1"처럼 실제 구조와 같은 이름의 포메이션을 스피너에 반영한다.
+  // 알려진 5개 포메이션 각각의 자체 좌표도 같은 방식으로 묶으면 그 이름과
+  // 정확히 같은 배열이 나오므로, 정확히 일치하면 그 이름을, 어디에도 딱
+  // 맞지 않는 배치라면 라인 구성이 가장 가까운 포메이션을 대신 고른다.
   const onTogglePosMode = () => {
     if (posMode) {
-      let d = 0, m = 0, a = 0;
-      coords.forEach(([, y], i) => {
-        if (slots[i] === 'GK') return;
-        if (y < DEF_MID_BOUND) d++;
-        else if (y < MID_ATT_BOUND) m++;
-        else a++;
-      });
+      const ys = coords.filter((_, i) => slots[i] !== 'GK').map(([, y]) => y);
+      const bands = clusterLineCounts(ys);
       let best: string | null = null;
       let bestDist = Infinity;
       for (const name of Object.keys(bootstrap.formations)) {
-        const [fd, fm, fa] = formationSignature(bootstrap.formations[name]);
-        const dist = Math.abs(fd - d) + Math.abs(fm - m) + Math.abs(fa - a);
+        const nameCoords = COORDS[name];
+        if (!nameCoords) continue;
+        const nameBands = clusterLineCounts(nameCoords.slice(1).map(([, y]) => y));
+        const len = Math.max(bands.length, nameBands.length);
+        let dist = 0;
+        for (let k = 0; k < len; k++) dist += Math.abs((bands[k] || 0) - (nameBands[k] || 0));
         if (dist < bestDist || (dist === bestDist && name === squad.formation)) {
           bestDist = dist;
           best = name;
@@ -350,7 +352,7 @@ export default function SquadTab() {
   const onAuto = async () => {
     try {
       await autoPlaceSquad();
-      toast('베스트 11이 자동 배치되었습니다.');
+      toast('베스트 XI를 추천했습니다. (배치 위치는 변경되지 않았습니다)');
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));
     }
@@ -414,7 +416,7 @@ export default function SquadTab() {
               ))}
             </select>
             <button type="button" className="btn small" onClick={onAuto}>
-              자동배치
+              베스트 XI 추천
             </button>
             <button type="button" className={'btn small' + (posMode ? ' primary' : '')} onClick={onTogglePosMode}>
               {posMode ? '배치 편집 완료' : '🎯 배치 편집'}

@@ -34,10 +34,19 @@ const ISSUES = [
       { id: 'ignore', label: '무시한다', satisfies: false, devotionDelta: -10 },
     ],
   },
+  {
+    id: 'formation',
+    prompt: '감독이 선호하는 방식과 다른 포메이션/전술이라 낯설어하며 불만을 표합니다.',
+    choices: [
+      { id: 'adjust', label: '선수에게 익숙한 스타일로 되돌리겠다고 약속한다', satisfies: true, devotionDelta: 15 },
+      { id: 'explain', label: '팀의 새로운 방향을 차분히 설명한다', satisfies: false, devotionDelta: 4 },
+      { id: 'ignore', label: '대수롭지 않게 넘긴다', satisfies: false, devotionDelta: -10 },
+    ],
+  },
 ];
 
-const CHECK_COOLDOWN_MS = 60 * 60 * 1000; // at most one roll per 60 real minutes — 10min was too naggy at RAISE_CHANCE=0.9 (near-guaranteed new complaint every 10 min)
-const RAISE_CHANCE = 0.9; // high — the cooldown is what paces things, not this roll
+const CHECK_COOLDOWN_MS = 10 * 60 * 1000; // at most one roll per 10 real minutes
+const RAISE_CHANCE = 0.5; // 10min 체크에 90%는 너무 잦아 매번 새 불만이 쌓였다 — 확률을 낮춰 체감 빈도를 조절
 const MAX_PENDING = 5; // stop rolling new ones once this many are unread
 
 function clamp(v, lo, hi) {
@@ -66,6 +75,9 @@ function pickLowAppearancePlayer(owned, playerStats) {
 //     and targets whoever's genuinely played the least (appearances).
 //   - "results" only fires once the team has an actual losing record
 //     (>=3 games played, >=40% losses), targeting a current starter.
+//   - "formation" only fires when the club squad's formation/tactic differs
+//     from the manager style chosen at registration, targeting a current
+//     starter (they're the ones actually playing the unfamiliar system).
 //   - "ambition" has no real-world signal to gate on, so it stays the
 //     always-eligible fallback (matches the original behavior).
 function maybeRaiseComplaint(user) {
@@ -85,17 +97,23 @@ function maybeRaiseComplaint(user) {
 
   const resultsEligible = totalGames >= 3 && lossRate >= 0.4 && starters.length > 0;
   const playtimeEligible = owned.length >= 3; // need an actual bench to compare against
+  // "감독 스타일" — 가입 때 정한 선호 포메이션/전술과 실제 클럽 스쿼드 설정이
+  // 다르면, 선발로 뛰는 선수들이 낯선 방식에 적응하지 못해 불만을 표한다.
+  const formationEligible =
+    starters.length > 0 &&
+    (user.squad.formation !== user.preferredFormation || (user.squad.tactic || 'balanced') !== user.preferredTactic);
 
   const pool = [];
   if (playtimeEligible) pool.push('playtime');
   if (resultsEligible) pool.push('results');
+  if (formationEligible) pool.push('formation');
   pool.push('ambition');
 
   const issueId = pool[Math.floor(Math.random() * pool.length)];
   let playerId;
   if (issueId === 'playtime') {
     playerId = pickLowAppearancePlayer(owned, playerStats);
-  } else if (issueId === 'results') {
+  } else if (issueId === 'results' || issueId === 'formation') {
     playerId = starters[Math.floor(Math.random() * starters.length)];
   } else {
     playerId = owned[Math.floor(Math.random() * owned.length)];

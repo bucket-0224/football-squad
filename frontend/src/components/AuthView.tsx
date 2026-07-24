@@ -17,6 +17,8 @@ export default function AuthView() {
   const [pickedLeague, setPickedLeague] = useState('EPL');
   const [pickedTeam, setPickedTeam] = useState<string | null>(null);
   const [pickedDyn, setPickedDyn] = useState(false);
+  const [preferredFormation, setPreferredFormation] = useState('4-3-3');
+  const [preferredTactic, setPreferredTactic] = useState('balanced');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -51,6 +53,8 @@ export default function AuthView() {
           clubName: clubName.trim(),
           team: pickedTeam,
           dyn: pickedDyn,
+          preferredFormation,
+          preferredTactic,
         });
       }
     } catch (err) {
@@ -123,6 +127,28 @@ export default function AuthView() {
                     }}
                   />
                 ))}
+              </div>
+              <div className="pick-label">
+                감독 스타일{' '}
+                <span className="pick-hint">
+                  — 선호하는 포메이션과 전술을 벗어나면 선수들이 낯설어하며 불만을 표할 수 있습니다
+                </span>
+              </div>
+              <div className="manager-style-row">
+                <select value={preferredFormation} onChange={(e) => setPreferredFormation(e.target.value)}>
+                  {Object.keys(bootstrap?.formations ?? { '4-3-3': [] }).map((f) => (
+                    <option key={f} value={f}>
+                      {f}
+                    </option>
+                  ))}
+                </select>
+                <select value={preferredTactic} onChange={(e) => setPreferredTactic(e.target.value)}>
+                  {Object.entries(bootstrap?.tactics ?? { balanced: '균형' }).map(([id, label]) => (
+                    <option key={id} value={id}>
+                      전술: {label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}

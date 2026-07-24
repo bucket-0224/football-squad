@@ -67,6 +67,8 @@ export interface User {
   complaints: Complaint[];
   transferRequests: TransferRequest[];
   mailbox: MailItem[];
+  preferredFormation: string;
+  preferredTactic: string;
   squad: Squad;
   pvpSquad: Squad;
   ratings: Ratings;

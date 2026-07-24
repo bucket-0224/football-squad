@@ -115,6 +115,8 @@ function sanitizeUser(u) {
     complaints: devotion.publicComplaints(u),
     transferRequests: u.transferRequests || [],
     mailbox: u.mailbox || [],
+    preferredFormation: u.preferredFormation,
+    preferredTactic: u.preferredTactic,
     squad: u.squad,
     pvpSquad: u.pvpSquad,
     ratings: ratingSummary(withUpgrades(u, u.squad)),
@@ -155,13 +157,18 @@ function bestStarters(poolIds, formation) {
 // ---- auth ------------------------------------------------------------------
 
 app.post('/api/register', async (req, res) => {
-  const { username, password, clubName, team } = req.body || {};
+  const { username, password, clubName, team, preferredFormation, preferredTactic } = req.body || {};
   if (typeof username !== 'string' || username.trim().length < 2 || username.trim().length > 16) {
     return bad(res, 400, '아이디는 2~16자로 입력해 주세요.');
   }
   if (typeof password !== 'string' || password.length < 4) {
     return bad(res, 400, '비밀번호는 4자 이상이어야 합니다.');
   }
+  // 감독 스타일: 선호 포메이션/전술 — 미지정 시 기본값, 잘못된 값이면 거부.
+  const formation = preferredFormation !== undefined ? preferredFormation : DEFAULT_FORMATION;
+  if (!FORMATIONS[formation]) return bad(res, 400, '알 수 없는 선호 포메이션입니다.');
+  const tactic = preferredTactic !== undefined ? preferredTactic : 'balanced';
+  if (!TACTICS[tactic]) return bad(res, 400, '알 수 없는 선호 전술입니다.');
   let teamName;
   try {
     teamName = await resolveTeam(team);
@@ -198,19 +205,23 @@ app.post('/api/register', async (req, res) => {
     complaints: [], // 여러 건 누적되는 pending 선수 불만
     transferRequests: [], // 헌신도가 바닥난 선수의 이적 요청
     lastComplaintCheck: 0,
+    // 감독 스타일(가입 시 지정) — 이 포메이션/전술을 벗어나면 선수들이
+    // 낯설어하며 불만을 표한다 (devotion.js의 'formation' 이슈 참고).
+    preferredFormation: formation,
+    preferredTactic: tactic,
     // start with the best XI already placed (fit-first, GK guaranteed)
     squad: {
-      formation: DEFAULT_FORMATION,
-      starters: bestStarters(roster, DEFAULT_FORMATION),
-      tactic: 'balanced',
+      formation,
+      starters: bestStarters(roster, formation),
+      tactic,
       captain: null,
       viceCaptain: null,
       roles: {},
     },
     pvpSquad: {
-      formation: DEFAULT_FORMATION,
+      formation,
       starters: new Array(11).fill(null),
-      tactic: 'balanced',
+      tactic,
       captain: null,
       viceCaptain: null,
       roles: {},
@@ -397,8 +408,9 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
   res.json({ user: sanitizeUser(req.user) });
 });
 
-// Auto-place the best XI (see bestStarters) over the owned/drawn pool. This
-// keeps a CAM out of the RB slot whenever an actual RB exists.
+// "베스트 XI 추천" — bestStarters()로 보유/뽑기 풀에서 최적의 선발 11명을
+// 골라 채워준다. 어떤 선수가 뛰는지만 바꾸고 슬롯의 화면상 위치(좌표)는
+// 절대 건드리지 않는다 — 그건 배치 편집(포지션 드래그) 전용 기능이다.
 app.post('/api/squad/auto', auth.authMiddleware, (req, res) => {
   const isPvp = (req.body || {}).kind === 'pvp';
   const squad = isPvp ? req.user.pvpSquad : req.user.squad;
@@ -418,10 +430,10 @@ app.post('/api/squad/auto', auth.authMiddleware, (req, res) => {
     captain: squad.captain && starters.includes(squad.captain) ? squad.captain : null,
     viceCaptain: squad.viceCaptain && starters.includes(squad.viceCaptain) ? squad.viceCaptain : null,
     roles: nextRoles,
-    // 자동배치는 어떤 선수가 어느 슬롯에 가는지만 바꿀 뿐 슬롯의 화면상
-    // 위치(포메이션 동일 시)는 그대로이므로, 사용자가 드래그로 잡아둔
-    // 커스텀 좌표는 유지한다.
-    slotCoords: formation === squad.formation ? squad.slotCoords || null : null,
+    // 베스트 XI 추천은 이 포메이션 안에서 어떤 선수가 어느 슬롯에 가는지만
+    // 바꿀 뿐 formation 자체는 절대 바꾸지 않으므로, 사용자가 드래그로 잡아둔
+    // 슬롯의 화면상 커스텀 좌표는 항상 그대로 유지한다.
+    slotCoords: squad.slotCoords || null,
   };
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user) });

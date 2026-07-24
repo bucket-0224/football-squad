@@ -83,6 +83,11 @@ function normalizeUser(u) {
   if (!Array.isArray(u.drawn)) u.drawn = [];
   if (!u.upgrades || typeof u.upgrades !== 'object') u.upgrades = {}; // 강화 단계
 
+  // 감독 스타일(가입 시 지정한 선호 포메이션/전술) — 이 필드가 생기기 전에
+  // 만든 계정은 당시 스쿼드 설정을 그대로 선호도로 간주해 역채움한다.
+  if (!u.preferredFormation) u.preferredFormation = u.squad.formation;
+  if (!u.preferredTactic) u.preferredTactic = u.squad.tactic || 'balanced';
+
   if (!u.squad.tactic) u.squad.tactic = 'balanced';
   if (u.squad.captain === undefined) u.squad.captain = null;
   if (u.squad.viceCaptain === undefined) u.squad.viceCaptain = null;
