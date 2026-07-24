@@ -23,6 +23,43 @@ const negotiations = new Map(); // userId -> negotiation
 const ATTEMPTS_PER_STAGE = 3;
 const BONUS_RATE = 0.25; // personal-terms demand ≈ 25% of market value
 
+// ---------------------------------------------------------------------------
+// Persuasion: a player still under contract at a real club (p.team) can have
+// strong loyalty to it — high enough and a bonus check alone doesn't cut it,
+// the personal-terms stage first needs the right pitch. Both loyalty and
+// which pitch actually lands are deterministic-but-hidden per player (same
+// stable-jitter shape as players.js's buildAttributes/buildPhysical) and
+// intentionally kept out of publicView — this is meant to be sounded out
+// through the negotiation itself, not read off an API response.
+function seededRand(str, salt) {
+  let h = 1779033703 ^ (salt || 0);
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  let t = (h += 0x6d2b79f5);
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+const LOYALTY_THRESHOLD = 65;
+const PERSUASION_BONUS_CUT = 0.7; // right pitch: bonus demand drops 30%
+const PERSUASION_MISS_HIKE = 1.08; // wrong pitch: demand creeps up instead
+
+const PERSUASION_ANGLES = [
+  { id: 'ambition', label: '더 큰 무대와 성장 기회를 약속한다' },
+  { id: 'roleGuarantee', label: '확실한 주전 자리와 핵심 역할을 약속한다' },
+  { id: 'project', label: '팀의 우승 프로젝트에 대한 비전을 설명한다' },
+];
+
+function playerLoyalty(p) {
+  return Math.round(seededRand(p.name + p.pos, 106) * 100);
+}
+function playerPersuasionAngle(p) {
+  return PERSUASION_ANGLES[Math.floor(seededRand(p.name + p.pos, 107) * PERSUASION_ANGLES.length)].id;
+}
+
 function rand(lo, hi) {
   return lo + Math.random() * (hi - lo);
 }
@@ -42,6 +79,12 @@ function publicView(neg) {
     bonus: neg.bonus,
     counter: neg.counter, // 상대의 최근 역제안 (있을 때만)
     marketValue: marketValue(neg.playerId),
+    // personal 단계 진입 + 소속팀 애착이 강한 선수일 때만 채워진다 — 어떤
+    // 선택지가 실제로 통하는지는 절대 노출하지 않는다 (persuasionAngle은
+    // 서버 안에서만 비교됨)
+    needsPersuasion: neg.needsPersuasion || false,
+    persuaded: neg.persuaded || false,
+    persuasionChoices: neg.needsPersuasion ? PERSUASION_ANGLES.map((a) => ({ id: a.id, label: a.label })) : null,
   };
 }
 
@@ -51,6 +94,7 @@ function start(user, playerId) {
   if (!p || !value) return { error: '존재하지 않는 선수입니다.', status: 404 };
   if (user.owned.includes(playerId)) return { error: '이미 보유 중인 선수입니다.', status: 400 };
 
+  const loyalty = playerLoyalty(p);
   const neg = {
     playerId,
     stage: 'club', // FA도 1단계(바이아웃)부터 시작 — 상대가 구단이 아니라 선수 본인일 뿐
@@ -61,6 +105,10 @@ function start(user, playerId) {
     clubAsk: Math.round(value * rand(1.05, 1.3)),
     bonusDemand: Math.round(value * BONUS_RATE * rand(0.9, 1.15)),
     attempts: { club: ATTEMPTS_PER_STAGE, personal: ATTEMPTS_PER_STAGE },
+    // only meaningful once personal-terms starts (see offer(), club->personal)
+    needsPersuasion: !!p.team && loyalty >= LOYALTY_THRESHOLD,
+    persuaded: false,
+    persuasionAngle: playerPersuasionAngle(p),
   };
   negotiations.set(user.id, neg);
 
@@ -80,6 +128,12 @@ function offer(user, amount) {
   const neg = negotiations.get(user.id);
   if (!neg) return { error: '진행 중인 협상이 없습니다.', status: 400 };
   const p = players.getPlayer(neg.playerId);
+  if (neg.stage === 'personal' && neg.needsPersuasion && !neg.persuaded) {
+    return {
+      error: `${p.name} 선수는 소속팀에 대한 애착이 강해 금액 제시만으로는 마음을 돌릴 수 없습니다. 먼저 설득해야 합니다.`,
+      status: 400,
+    };
+  }
   amount = Math.round(Number(amount));
   if (!Number.isFinite(amount) || amount < 0) {
     return { error: '제시 금액이 올바르지 않습니다.', status: 400 };
@@ -164,6 +218,50 @@ function offer(user, amount) {
     negotiation: publicView(neg),
     result: 'rejected',
     message: `${who}이(가) ${tone}. (요구액이 오히려 올라갔습니다)`,
+  };
+}
+
+// Persuasion attempt for a personal-terms stage that needsPersuasion — picks
+// one of the canned pitches (publicView's persuasionChoices). The right one
+// (hidden, per-player) cuts the bonus demand and clears the gate for offer();
+// a miss consumes an attempt from the same pool offer() draws from and makes
+// the player harder to sign, same "wrong answer costs you" shape as a
+// lowballed offer.
+function persuade(user, angleId) {
+  const neg = negotiations.get(user.id);
+  if (!neg) return { error: '진행 중인 협상이 없습니다.', status: 400 };
+  if (neg.stage !== 'personal' || !neg.needsPersuasion) {
+    return { error: '지금은 설득이 필요한 상황이 아닙니다.', status: 400 };
+  }
+  if (neg.persuaded) return { error: '이미 설득에 성공했습니다.', status: 400 };
+  const p = players.getPlayer(neg.playerId);
+  const angle = PERSUASION_ANGLES.find((a) => a.id === angleId);
+  if (!angle) return { error: '알 수 없는 설득 방식입니다.', status: 400 };
+
+  if (angleId === neg.persuasionAngle) {
+    neg.persuaded = true;
+    neg.bonusDemand = Math.round(neg.bonusDemand * PERSUASION_BONUS_CUT);
+    return {
+      negotiation: publicView(neg),
+      result: 'persuaded',
+      message: `${p.name} 선수의 마음이 움직였습니다! 개인 조건 협상에 응하겠다고 합니다.`,
+    };
+  }
+
+  neg.attempts.personal--;
+  if (neg.attempts.personal <= 0) {
+    negotiations.delete(user.id);
+    return {
+      negotiation: null,
+      result: 'failed',
+      message: `${p.name} 선수가 끝내 마음을 열지 않았습니다. 처음부터 다시 시도해야 합니다.`,
+    };
+  }
+  neg.bonusDemand = Math.round(neg.bonusDemand * PERSUASION_MISS_HIKE);
+  return {
+    negotiation: publicView(neg),
+    result: 'persuade_miss',
+    message: `${p.name} 선수는 시큰둥한 반응입니다. 다른 방식으로 설득해 보세요.`,
   };
 }
 
@@ -265,4 +363,4 @@ function openPack(user, packId) {
   };
 }
 
-module.exports = { start, offer, cancel, current, packList, openPack };
+module.exports = { start, offer, persuade, cancel, current, packList, openPack };

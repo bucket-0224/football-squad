@@ -457,6 +457,12 @@ app.post('/api/transfer/offer', auth.authMiddleware, (req, res) => {
   res.json(r);
 });
 
+app.post('/api/transfer/persuade', auth.authMiddleware, (req, res) => {
+  const r = transfer.persuade(req.user, (req.body || {}).angleId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json(r);
+});
+
 app.post('/api/transfer/cancel', auth.authMiddleware, (req, res) => {
   res.json(transfer.cancel(req.user));
 });

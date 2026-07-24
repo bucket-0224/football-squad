@@ -4,6 +4,11 @@ import { useAppStore } from '../store/useAppStore';
 import PlayerCard from './PlayerCard';
 import type { CatalogPlayer, User } from '../types';
 
+interface PersuasionChoice {
+  id: string;
+  label: string;
+}
+
 interface Negotiation {
   playerId: string;
   player: CatalogPlayer;
@@ -13,6 +18,9 @@ interface Negotiation {
   bonus: number | null;
   counter: number | null;
   marketValue: number;
+  needsPersuasion: boolean;
+  persuaded: boolean;
+  persuasionChoices: PersuasionChoice[] | null;
 }
 
 interface LogLine {
@@ -21,6 +29,7 @@ interface LogLine {
 }
 
 type OfferResult = 'accepted' | 'rejected' | 'counter' | 'failed' | 'signed';
+type PersuadeResult = 'persuaded' | 'persuade_miss' | 'failed';
 
 export default function NegotiationModal({ player, onClose }: { player: CatalogPlayer; onClose: () => void }) {
   const { me, setMe } = useAppStore();
@@ -87,6 +96,26 @@ export default function NegotiationModal({ player, onClose }: { player: CatalogP
     }
   };
 
+  const submitPersuade = async (angleId: string) => {
+    addLine(`💬 "${neg?.persuasionChoices?.find((c) => c.id === angleId)?.label}"`, 'me');
+    try {
+      const r = await api.post<{
+        negotiation: Negotiation | null;
+        result: PersuadeResult;
+        message: string;
+      }>('/api/transfer/persuade', { angleId });
+      setNeg(r.negotiation);
+      if (r.result === 'failed') {
+        addLine(r.message, 'bad');
+        setEnded(true);
+      } else {
+        addLine(r.message, r.result === 'persuaded' ? 'good' : 'bad');
+      }
+    } catch (err) {
+      addLine(err instanceof Error ? err.message : String(err), 'bad');
+    }
+  };
+
   const close = () => {
     if (!ended) api.post('/api/transfer/cancel').catch(() => {});
     onClose();
@@ -140,6 +169,20 @@ export default function NegotiationModal({ player, onClose }: { player: CatalogP
                 </div>
               ))}
             </div>
+            {neg && neg.stage === 'personal' && neg.needsPersuasion && !neg.persuaded && !ended && (
+              <div className="nego-persuade-row">
+                <p className="dim small-text">
+                  {player.name} 선수는 소속팀에 대한 애착이 강합니다 — 먼저 설득해야 개인 조건을 논의할 수 있습니다.
+                </p>
+                <div className="nego-persuade-choices">
+                  {neg.persuasionChoices?.map((c) => (
+                    <button key={c.id} type="button" className="btn small" onClick={() => submitPersuade(c.id)}>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="nego-offer-row">
               <input
                 id="nego-amount"
@@ -148,13 +191,18 @@ export default function NegotiationModal({ player, onClose }: { player: CatalogP
                 step={10}
                 placeholder="제시 금액"
                 value={amount}
-                disabled={ended || !neg}
+                disabled={ended || !neg || (neg.stage === 'personal' && neg.needsPersuasion && !neg.persuaded)}
                 onChange={(e) => setAmount(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') submitOffer();
                 }}
               />
-              <button type="button" className="btn primary" disabled={ended || !neg} onClick={submitOffer}>
+              <button
+                type="button"
+                className="btn primary"
+                disabled={ended || !neg || (neg.stage === 'personal' && neg.needsPersuasion && !neg.persuaded)}
+                onClick={submitOffer}
+              >
                 제시
               </button>
             </div>

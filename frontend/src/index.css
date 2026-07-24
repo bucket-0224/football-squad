@@ -708,6 +708,9 @@ input:focus, select:focus { border-color: var(--blue); }
 .nego-line.bad { color: var(--red); }
 .nego-offer-row { display: flex; gap: 8px; }
 .nego-offer-row input { flex: 1; }
+.nego-persuade-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
+.nego-persuade-choices { display: flex; flex-direction: column; gap: 6px; }
+.nego-persuade-choices .btn { text-align: left; white-space: normal; line-height: 1.35; }
 .attempts-dots { letter-spacing: 2px; }
 
 /* ===== packs ===== */
