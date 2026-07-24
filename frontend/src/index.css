@@ -215,16 +215,13 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 
 /* ===== main layout ===== */
-/* overflow-x:hidden 방어 코드: "아이폰15 스쿼드 화면 오른쪽에 공간이 나지
-   않아 중앙 정렬처럼 안 보인다"는 리포트 — 좌우 padding은 16px로 고정돼
-   대칭이어야 정상인데, 실기기로 직접 재현·측정을 못 해서 스쿼드 탭 내부의
-   어떤 요소(카드 그리드/평점바/드래그 고스트 등)가 뷰포트보다 살짝
-   넓어져 오른쪽 padding을 밀어내고 있는 것으로 의심 중이다. 원인 요소를
-   못 찾은 상태라, 최소한 그 초과분이 "페이지가 오른쪽으로 밀리며 우측
-   padding이 사라지는" 형태로 보이지 않게(대신 그냥 잘리게) 막아둔다 —
-   근본 수정은 아니니, 다음 세션에서 실기기로 재현되면 Safari 원격 디버거
-   (Mac + 케이블)로 실제 스크롤폭(scrollWidth vs clientWidth)을 먼저 재서
-   어떤 요소가 넘치는지부터 특정할 것. */
+/* "아이폰15 스쿼드 화면 오른쪽에 공간이 나지 않는다"는 리포트의 실제 원인을
+   찾아 .squad-layout에서 고쳤다(그 옆 주석 참고 — CSS Grid 트랙이
+   minmax(0, 1fr) 없이 bare 1fr이라 #ratings-bar의 min-content 너비만큼
+   전체 페이지가 부풀어 올랐던 grid blowout). overflow-x:hidden은 그
+   근본 수정과 별개로 남겨두는 안전망 — 넘치는 요소가 없으면 아무 영향도
+   없고, 나중에 비슷한 종류의 넘침이 또 생기더라도 최소한 "우측 padding이
+   밀려 사라지는" 형태로는 안 보이게 막아준다. */
 #view-main { max-width: 1100px; margin: 0 auto; padding: 0 16px 40px; overflow-x: hidden; }
 #topbar {
   display: flex; justify-content: space-between; align-items: center;
@@ -339,9 +336,23 @@ input:focus, select:focus { border-color: var(--blue); }
 #squad-mode .mode-hint, .club-change-btn .mode-hint { display: block; margin-top: 2px; }
 #pvp-note { margin-bottom: 10px; }
 
-.squad-layout { display: grid; grid-template-columns: minmax(0, 460px) 1fr; gap: 20px; }
+/* 요청("아이폰15 스쿼드 화면 오른쪽에 공간이 나지 않는다" → 이후
+   maximum-scale=1로 줌을 잠그자 "아예 화면이 짤린다")의 실제 원인을 여기서
+   찾았다 — 진짜 좌표를 393px로 강제 제약해서 실측한 결과: 이 grid의 두 번째
+   트랙이 bare `1fr`이라(minmax(0, ...) 없이) CSS Grid의 기본 동작상 자식의
+   min-content 너비보다 좁아질 수 없다("grid blowout"). #ratings-bar가
+   `.rating-cell { min-width:62px }` 카드 6개를 담고 있어 최소 요구 너비가
+   402px인데, 모바일 화면(약 360~390px)보다 넓어서 이 grid 트랙 전체가
+   402px로 부풀어 올랐고, 그게 페이지 전체를 오른쪽으로 밀어냈다(오른쪽
+   패딩이 안 보이던 진짜 이유). 줌이 자유로울 땐 iOS가 이 초과분을 축소
+   표시해 안 짤리고 "안 맞아 보이기만" 했지만, maximum-scale=1로 줌을
+   잠그자 더는 축소 보정이 안 돼서 그대로 화면 밖으로 잘려 나갔다.
+   `minmax(0, 1fr)`로 바꾸면 트랙이 컨테이너보다 좁아질 수 있게 되어
+   #ratings-bar가 실제로 좁아지고, 이미 걸려 있는 flex-wrap:wrap이 그제야
+   제대로 작동해 카드가 2줄로 감싸진다(넘치지 않음). */
+.squad-layout { display: grid; grid-template-columns: minmax(0, 460px) minmax(0, 1fr); gap: 20px; }
 @media (max-width: 800px) {
-  .squad-layout { grid-template-columns: 1fr; }
+  .squad-layout { grid-template-columns: minmax(0, 1fr); }
   /* 모바일에서는 스쿼드 탭 전체가 한 스크롤로 이어져야 한다 — 보유 선수
      목록이 자기만의 max-height/overflow-y를 유지하면 페이지 스크롤과
      목록 내부 스크롤이 동시에 존재하는 "이중 스크롤"이 된다. */
@@ -1012,7 +1023,15 @@ input:focus, select:focus { border-color: var(--blue); }
 .nego-line.good { color: var(--green); font-weight: 700; }
 .nego-line.bad { color: var(--red); }
 .nego-offer-row { display: flex; gap: 8px; }
-.nego-offer-row input { flex: 1; }
+/* 요청: "선수 바이아웃 팝업에서 제시 버튼이 조금 영역에 안맞아서 가로
+   스크롤이 발생 (모바일에서)" — type="number" input은 flex:1이 있어도
+   스피너 때문에 min-width가 auto로 잡혀 안 줄어드는 브라우저가 있다(특히
+   모바일 WebKit). min-width:0을 명시해야 실제로 버튼과 나란히 좁아진다 —
+   이미 이 코드베이스에서 select 오버플로를 고칠 때 쓴 것과 같은 패턴
+   (.pitch-toolbar select { flex:1; min-width:0 } 참고). .nego-modal이
+   overflow-y:auto만 지정해도 overflow 스펙상 x축도 auto로 같이 계산돼
+   팝업 안에서 가로 스크롤바가 생기는 게 실제 증상이었다. */
+.nego-offer-row input { flex: 1; min-width: 0; }
 .nego-persuade-row { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
 .nego-persuade-choices { display: flex; flex-direction: column; gap: 6px; }
 .nego-persuade-choices .btn { text-align: left; white-space: normal; line-height: 1.35; }

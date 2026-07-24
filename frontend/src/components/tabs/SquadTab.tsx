@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
 import { activeRatings, activeSquad, upgradedCard } from '../../game/cards';
 import { COORDS } from '../../game/formationCoords';
-import { BAND_LABEL, bandOfY, convertedCardByBand, slotPositionLabel } from '../../game/bands';
+import { BAND_LABEL, bandOfY, convertedCardByBand, roleMatchPos, slotPositionLabel } from '../../game/bands';
 import PlayerCard, { EmptySlotCard } from '../PlayerCard';
 import OwnedList from '../OwnedList';
 import PickerModal from '../PickerModal';
@@ -55,25 +55,37 @@ function RolePicker({
   squad,
   catalog,
   roles,
+  coords,
 }: {
   squad: Squad;
   catalog: Map<string, CatalogPlayer>;
   roles: Record<string, Role>;
+  coords: [number, number][];
 }) {
   const saveSquad = useAppStore((s) => s.saveSquad);
 
+  // 요청: "선수 별 플레이스타일 지정할 때도 현재 포지션에 맞게 어떤 플레이를
+  // 할지 변경해주고 (공미여도 윙어면 윙어 스타일 플레이)" — 카드 라벨/OVR
+  // 보정(convertedCardByBand)과 완전히 같은 원칙: 유형 후보도 선수 본인의
+  // 실제 카탈로그 포지션(p.pos)이 아니라 "지금 피치 위 이 슬롯에 배치된
+  // 자리"(coords[i] 기준 roleMatchPos)로 골라야 한다. GK는 슬롯 좌표가 없어
+  // (드래그가 막혀 있음) band 5 취급이 애매하므로 카탈로그 포지션을 그대로
+  // 쓴다.
   const rows = squad.starters
-    .map((id) => (id ? catalog.get(id) : null))
-    .filter((p): p is CatalogPlayer => !!p)
-    .map((p) => {
-      const opts = Object.entries(roles).filter(([, r]) => r.pos.includes(p.pos));
+    .map((id, i) => {
+      const p = id ? catalog.get(id) : null;
+      if (!p) return null;
+      const coord = coords[i];
+      const placedPos = p.pos === 'GK' || !coord ? p.pos : roleMatchPos(coord[0], coord[1]);
+      const placedLabel = p.pos === 'GK' || !coord ? p.pos : slotPositionLabel(coord[0], coord[1]);
+      const opts = Object.entries(roles).filter(([, r]) => r.pos.includes(placedPos));
       if (opts.length < 2) return null;
       let current = squad.roles?.[p.id];
-      if (!current) {
+      if (!current || !opts.some(([roleId]) => roleId === current)) {
         const def = opts.find(([, r]) => r.isDefault);
         current = def ? def[0] : opts[0][0];
       }
-      return { p, opts, current };
+      return { p, placedLabel, opts, current };
     })
     .filter((x): x is NonNullable<typeof x> => !!x);
 
@@ -93,10 +105,10 @@ function RolePicker({
 
   return (
     <div id="role-picker" className="role-picker">
-      {rows.map(({ p, opts, current }) => (
+      {rows.map(({ p, placedLabel, opts, current }) => (
         <div className="role-row" key={p.id}>
           <span className="role-player">
-            {p.name} <span className="dim small-text">{p.pos}</span>
+            {p.name} <span className="dim small-text">{placedLabel}</span>
           </span>
           <div className="role-chips">
             {opts.map(([roleId, r]) => (
@@ -516,7 +528,7 @@ export default function SquadTab() {
             })}
           </div>
           <RatingsBar ratings={ratings} />
-          <RolePicker squad={squad} catalog={catalog} roles={bootstrap.roles} />
+          <RolePicker squad={squad} catalog={catalog} roles={bootstrap.roles} coords={coords} />
         </div>
         <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} />
       </div>

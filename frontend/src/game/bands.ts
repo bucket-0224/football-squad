@@ -101,6 +101,24 @@ export function slotPositionLabel(x: number, y: number): string {
   return ZONE_LABEL[band][xZone(x)];
 }
 
+// slotPositionLabel이 내놓는 라벨 중 "중앙에 두 명이 나란히" 서는 자리
+// (LCM/RCM, LCB/RCB, LDM/RDM, LST/RST)는 유형(Role, backend simulate.js의
+// ROLE_EMPHASIS/pos 배열) 쪽 어휘에는 없다 — 유형 정의는 항상 기본형
+// (CM/CB/CDM/ST)만 쓴다. 요청: "선수 별 플레이스타일 지정할 때도 현재
+// 포지션(피치 위 배치)에 맞게... 공미여도 윙어면 윙어 스타일 플레이" —
+// 카드 라벨/OVR 보정(convertedCardByBand)과 동일하게 "지금 배치된 자리"를
+// 기준으로 유형 후보를 골라야 하므로, 유형 매칭에 한해서만 이 기본형으로
+// 정규화한다(화면에 보여줄 라벨 자체는 slotPositionLabel의 원래 값을 그대로
+// 쓴다 — LCM을 CM으로 바꿔 보여주면 다른 화면과 표기가 어긋난다).
+export function roleMatchPos(x: number, y: number): string {
+  const label = slotPositionLabel(x, y);
+  if (label === 'LST' || label === 'RST') return 'ST';
+  if (label === 'LCM' || label === 'RCM') return 'CM';
+  if (label === 'LDM' || label === 'RDM') return 'CDM';
+  if (label === 'LCB' || label === 'RCB') return 'CB';
+  return label;
+}
+
 // 카드에 실제로 보여줄 형태를 만든다 — 포지션 라벨은 지금 놓인 자리(x,y)를
 // 그대로 반영하고, OVR은 선수 본인의 실제 포지션이 그 라인에 맞는지에 따라
 // 깎인다(맞으면 그대로). 즉 라벨은 "여기 서면 무슨 포지션"이고 OVR은 "이
