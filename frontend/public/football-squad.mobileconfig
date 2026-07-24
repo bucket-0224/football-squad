@@ -164,11 +164,11 @@ ORJKkciRUIpEjoRSJHIklCKRI6EUiRwJpUjkSChFIkdCKRI5EkqRyJFQikSOhFIkciSwMvwPaimp
 			<key>IsRemovable</key>
 			<true/>
 			<key>Label</key>
-			<string>풋볼 스쿼드</string>
+			<string>FC Management</string>
 			<key>PayloadDescription</key>
-			<string>홈 화면에 풋볼 스쿼드 아이콘을 추가합니다.</string>
+			<string>홈 화면에 FC Management 아이콘을 추가합니다.</string>
 			<key>PayloadDisplayName</key>
-			<string>풋볼 스쿼드 Web Clip</string>
+			<string>FC Management Web Clip</string>
 			<key>PayloadIdentifier</key>
 			<string>com.footballsquad.app.webclip</string>
 			<key>PayloadType</key>
@@ -186,13 +186,13 @@ ORJKkciRUIpEjoRSJHIklCKRI6EUiRwJpUjkSChFIkdCKRI5EkqRyJFQikSOhFIkciSwMvwPaimp
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>풋볼 스쿼드를 홈 화면에 앱처럼 추가합니다 (주소창 없이 전체화면으로 열림).</string>
+	<string>FC Management를 홈 화면에 앱처럼 추가합니다 (주소창 없이 전체화면으로 열림).</string>
 	<key>PayloadDisplayName</key>
-	<string>풋볼 스쿼드</string>
+	<string>FC Management</string>
 	<key>PayloadIdentifier</key>
 	<string>com.footballsquad.app.profile</string>
 	<key>PayloadOrganization</key>
-	<string>풋볼 스쿼드</string>
+	<string>FC Management</string>
 	<key>PayloadRemovalDisallowed</key>
 	<false/>
 	<key>PayloadType</key>

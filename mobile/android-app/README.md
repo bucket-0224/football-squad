@@ -1,4 +1,4 @@
-# 풋볼 스쿼드 — Android (Capacitor WebView 래퍼)
+# FC Management — Android (Capacitor WebView 래퍼)
 
 배포된 웹앱(`capacitor.config.json`의 `server.url`)을 그대로 여는 WebView 래퍼입니다.
 아직 도메인/HTTPS가 없어서 TWA(Trusted Web Activity) 대신 이 방식으로 우선 빌드했습니다 —

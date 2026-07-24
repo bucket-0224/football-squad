@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       manifest: {
-        name: '풋볼 스쿼드',
-        short_name: '풋볼 스쿼드',
+        name: 'FC Management',
+        short_name: 'FC Management',
         description: '나만의 스쿼드를 만들어 실시간 대전에서 승리하세요',
         lang: 'ko',
         start_url: '/',

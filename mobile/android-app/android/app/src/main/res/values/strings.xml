@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">풋볼 스쿼드</string>
-    <string name="title_activity_main">풋볼 스쿼드</string>
+    <string name="app_name">FC Management</string>
+    <string name="title_activity_main">FC Management</string>
     <string name="package_name">com.footballsquad.app</string>
     <string name="custom_url_scheme">com.footballsquad.app</string>
 </resources>

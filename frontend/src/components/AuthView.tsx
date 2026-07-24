@@ -63,7 +63,7 @@ export default function AuthView() {
   return (
     <section id="view-auth" className="view">
       <div className="auth-card">
-        <h1>⚽ 풋볼 스쿼드</h1>
+        <h1>⚽ FC Management</h1>
         <p className="tagline">나만의 스쿼드를 만들어 실시간 대전에서 승리하세요</p>
         <div className="auth-tabs">
           <button type="button" className={authMode === 'login' ? 'active' : ''} onClick={() => switchMode('login')}>

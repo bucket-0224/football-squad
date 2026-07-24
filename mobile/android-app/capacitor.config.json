@@ -1,6 +1,6 @@
 {
   "appId": "com.footballsquad.app",
-  "appName": "풋볼 스쿼드",
+  "appName": "FC Management",
   "webDir": "www",
   "backgroundColor": "#0d1117",
   "server": {
