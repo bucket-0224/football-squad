@@ -16,6 +16,7 @@ const dynteams = require('./data/dynteams');
 const season = require('./season');
 const devotion = require('./devotion');
 const mailbox = require('./mailbox');
+const account = require('./account');
 
 // rebuild dynamically fetched clubs so persisted player ids keep resolving,
 // then fill in team badges + re-fetch pre-v2 rosters in the background
@@ -58,7 +59,9 @@ async function resolveTeam(team) {
 }
 
 const app = express();
-app.use(express.json());
+// default 100kb is too small for a base64-encoded avatar upload; 5mb
+// comfortably covers the 3MB (pre-base64) cap account.js enforces
+app.use(express.json({ limit: '5mb' }));
 
 // Frontend is served separately (its own folder/process), so allow
 // cross-origin requests. Restrict via CORS_ORIGIN in production
@@ -97,6 +100,7 @@ function sanitizeUser(u) {
   return {
     id: u.id,
     username: u.username,
+    avatarUrl: u.avatarUrl || null,
     clubName: u.clubName,
     baseTeam: u.baseTeam,
     coins: u.coins,
@@ -177,6 +181,7 @@ app.post('/api/register', async (req, res) => {
     id: 'u' + crypto.randomBytes(8).toString('hex'),
     username: name,
     passwordHash: auth.hashPassword(password),
+    avatarUrl: null,
     createdAt: new Date().toISOString(),
     clubName: (typeof clubName === 'string' && clubName.trim().slice(0, 20)) || `${name} FC`,
     baseTeam: teamName,
@@ -228,6 +233,27 @@ app.post('/api/login', (req, res) => {
 app.post('/api/logout', auth.authMiddleware, (req, res) => {
   auth.revoke(req.token);
   res.json({ ok: true });
+});
+
+// ---- 계정 설정 (비밀번호 변경 / 프로필 사진) --------------------------------------
+
+app.put('/api/account/password', auth.authMiddleware, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  const r = account.changePassword(req.user, currentPassword, newPassword);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ ok: true });
+});
+
+app.put('/api/account/avatar', auth.authMiddleware, (req, res) => {
+  const { imageDataUrl } = req.body || {};
+  const r = account.setAvatar(req.user, imageDataUrl);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ user: sanitizeUser(req.user) });
+});
+
+app.delete('/api/account/avatar', auth.authMiddleware, (req, res) => {
+  account.clearAvatar(req.user);
+  res.json({ user: sanitizeUser(req.user) });
 });
 
 // ---- public bootstrap data -------------------------------------------------

@@ -68,6 +68,9 @@ interface AppState {
     requestId: string,
     choice: 'keep' | 'release'
   ) => Promise<{ released: boolean; devotion?: number }>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  setAvatar: (imageDataUrl: string) => Promise<void>;
+  clearAvatar: () => Promise<void>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -220,5 +223,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     set({ me: r.user });
     return { released: r.released, devotion: r.devotion };
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    await api.put('/api/account/password', { currentPassword, newPassword });
+  },
+
+  setAvatar: async (imageDataUrl) => {
+    const { user } = await api.put<{ user: User }>('/api/account/avatar', { imageDataUrl });
+    set({ me: user });
+  },
+
+  clearAvatar: async () => {
+    const { user } = await api.del<{ user: User }>('/api/account/avatar');
+    set({ me: user });
   },
 }));

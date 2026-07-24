@@ -52,6 +52,7 @@ export interface TransferRequest {
 export interface User {
   id: string;
   username: string;
+  avatarUrl?: string | null;
   clubName: string;
   baseTeam: string;
   coins: number;
