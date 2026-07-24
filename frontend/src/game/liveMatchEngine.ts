@@ -157,7 +157,12 @@ function vizAttrMul(v: number | undefined): number {
 
 function vizShortName(name: string | undefined): string {
   if (!name) return '';
-  const last = String(name).trim().split(/\s+/).pop() || '';
+  // enhanced/icon cards carry a literal tier suffix in their name (e.g.
+  // "Kane (Ultra)", "Xavi Hernandez (Icon)") — strip it before taking the
+  // last token, or the suffix itself becomes the sprite's label/commentary
+  // name instead of the player's actual surname.
+  const base = String(name).trim().replace(/\s*\([^)]*\)\s*$/, '');
+  const last = base.split(/\s+/).pop() || '';
   return last.length > 10 ? last.slice(0, 9) + '…' : last;
 }
 

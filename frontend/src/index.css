@@ -245,9 +245,9 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .slot-info {
   position: absolute; top: -4px; right: -4px; z-index: 5;
-  width: 18px; height: 18px; border-radius: 50%; padding: 0 0 1px 0.5px;
+  width: 18px; height: 18px; border-radius: 50%; padding: 0;
   background: rgba(20, 20, 30, .85); border: 1px solid rgba(255,255,255,.4);
-  color: #fff; font-size: 11px; line-height: 1; cursor: pointer;
+  color: #fff; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   box-sizing: border-box;
 }

@@ -16,6 +16,19 @@ import type { CatalogPlayer, Ratings, Role, Squad } from '../../types';
 // 이동량이 이 값 미만이면 클릭으로 취급해 기존 클릭 동작을 그대로 둔다.
 const DRAG_THRESHOLD_PX = 8;
 
+// "ⓘ" 유니코드 한 글자는 원과 i가 폰트에 미리 합쳐진 글리시프라 배지의 CSS
+// 원 배경과 서로 다른 중심을 갖는다 — 안쪽 여백을 아무리 조정해도 폰트마다
+// 미세하게 어긋난다. 원은 버튼 배경(.slot-info)이 그리고, 이 SVG는 순수하게
+// 점+세로획만 그려 항상 정확히 중앙에 오게 한다.
+function InfoIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true">
+      <circle cx="12" cy="6.5" r="2.3" fill="currentColor" />
+      <rect x="9.8" y="10.5" width="4.4" height="10" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 function RatingsBar({ ratings }: { ratings: Ratings }) {
   const cells: [string, string | number, string?][] = [
     ['공격', ratings.ATT],
@@ -349,7 +362,7 @@ export default function SquadTab() {
                       title="선수 정보"
                       onClick={guardClick(() => setDetailId(p.id))}
                     >
-                      ⓘ
+                      <InfoIcon />
                     </button>
                   )}
                 </div>
