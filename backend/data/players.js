@@ -70,6 +70,159 @@ function buildAttributes(name, pos, ovr) {
   return out;
 }
 
+// Real height(cm)/weight(kg) for every named real footballer authored in
+// CLUB_ROSTERS + MARKET_POOL below (keyed by base name — enhanced/icon tier
+// suffixes like " (Icon)"/" (Ultra)" are stripped before lookup, since an
+// enhanced card is still the same real person). Covers the ~328 statically
+// authored real players; dynamically-fetched club/national rosters (Saudi
+// Pro League + the 24 curated nations, fetched live from Wikipedia) aren't
+// individually catalogued here and keep the position-archetype estimate
+// below instead — there's no practical way to hand-verify every player in
+// those live-fetched squads.
+const REAL_PHYSICAL = {
+  // Man City
+  'Gianluigi Donnarumma': [196, 90], 'Matheus Nunes': [183, 76], 'Ruben Dias': [187, 82],
+  'Josko Gvardiol': [185, 80], 'Rayan Ait-Nouri': [179, 71], 'Rodri': [191, 82],
+  'Tijjani Reijnders': [178, 73], 'Bernardo Silva': [173, 64], 'Phil Foden': [171, 70],
+  'Erling Haaland': [195, 88], 'Jeremy Doku': [175, 74], 'Omar Marmoush': [182, 75],
+  'Rayan Cherki': [175, 68], 'John Stones': [188, 70],
+  // Real Madrid
+  'Thibaut Courtois': [199, 96], 'Trent Alexander-Arnold': [175, 69], 'Antonio Rudiger': [190, 88],
+  'Dean Huijsen': [195, 87], 'Alvaro Carreras': [182, 75], 'Aurelien Tchouameni': [188, 89],
+  'Jude Bellingham': [186, 75], 'Federico Valverde': [182, 78], 'Rodrygo': [174, 64],
+  'Kylian Mbappe': [178, 73], 'Vinicius Jr': [176, 73], 'Arda Guler': [173, 62],
+  'Eduardo Camavinga': [182, 68], 'Endrick': [178, 73],
+  // Bayern Munich
+  'Manuel Neuer': [193, 92], 'Konrad Laimer': [178, 74], 'Dayot Upamecano': [186, 90],
+  'Kim Min-jae': [190, 88], 'Alphonso Davies': [183, 74], 'Joshua Kimmich': [177, 73],
+  'Aleksandar Pavlovic': [185, 75], 'Jamal Musiala': [183, 72], 'Michael Olise': [178, 73],
+  'Harry Kane': [188, 89], 'Luis Diaz': [178, 65], 'Serge Gnabry': [176, 75],
+  'Leon Goretzka': [189, 81], 'Jonathan Tah': [195, 96],
+  // Paris SG
+  'Lucas Chevalier': [190, 82], 'Achraf Hakimi': [181, 73], 'Marquinhos': [183, 75],
+  'Willian Pacho': [186, 79], 'Nuno Mendes': [176, 70], 'Vitinha': [172, 64],
+  'Joao Neves': [176, 65], 'Fabian Ruiz': [189, 78], 'Ousmane Dembele': [178, 67],
+  'Goncalo Ramos': [186, 80], 'Khvicha Kvaratskhelia': [183, 70], 'Desire Doue': [180, 72],
+  'Bradley Barcola': [181, 66], 'Lee Kang-in': [173, 65],
+  // Liverpool
+  'Alisson': [191, 91], 'Jeremie Frimpong': [171, 68], 'Virgil van Dijk': [195, 92],
+  'Ibrahima Konate': [194, 87], 'Milos Kerkez': [180, 75], 'Ryan Gravenberch': [190, 79],
+  'Alexis Mac Allister': [174, 70], 'Dominik Szoboszlai': [186, 79], 'Mohamed Salah': [175, 71],
+  'Alexander Isak': [192, 79], 'Florian Wirtz': [176, 68], 'Cody Gakpo': [189, 79],
+  'Hugo Ekitike': [189, 75], 'Curtis Jones': [185, 74],
+  // Inter Miami
+  'Oscar Ustari': [186, 82], 'Marcelo Weigandt': [178, 72], 'Tomas Aviles': [186, 79],
+  'Maximiliano Falcon': [188, 82], 'Noah Allen': [178, 72], 'Rodrigo De Paul': [180, 72],
+  'Telasco Segovia': [178, 70], 'Federico Redondo': [185, 77], 'Tadeo Allende': [174, 68],
+  'Luis Suarez': [182, 86], 'Lionel Messi': [170, 72], 'Benjamin Cremaschi': [180, 73],
+  'Yannick Bright': [183, 75], 'Ian Fray': [188, 80],
+  // Arsenal
+  'David Raya': [183, 78], 'Jurrien Timber': [178, 75], 'William Saliba': [192, 82],
+  'Gabriel Magalhaes': [190, 87], 'Myles Lewis-Skelly': [176, 70], 'Martin Zubimendi': [182, 76],
+  'Declan Rice': [185, 82], 'Martin Odegaard': [178, 68], 'Bukayo Saka': [178, 72],
+  'Viktor Gyokeres': [191, 88], 'Gabriel Martinelli': [176, 68], 'Leandro Trossard': [172, 68],
+  'Kai Havertz': [193, 82], 'Ben White': [179, 75],
+  // Chelsea
+  'Robert Sanchez': [197, 92], 'Reece James': [183, 82], 'Wesley Fofana': [186, 80],
+  'Levi Colwill': [186, 78], 'Marc Cucurella': [172, 70], 'Moises Caicedo': [178, 77],
+  'Enzo Fernandez': [178, 76], 'Cole Palmer': [189, 72], 'Pedro Neto': [172, 65],
+  'Joao Pedro': [178, 73], 'Alejandro Garnacho': [180, 70], 'Estevao': [173, 64],
+  'Malo Gusto': [180, 68], 'Trevoh Chalobah': [189, 80],
+  // Man United
+  'Senne Lammens': [197, 90], 'Amad Diallo': [173, 68], 'Matthijs de Ligt': [189, 89],
+  'Leny Yoro': [192, 82], 'Luke Shaw': [185, 80], 'Casemiro': [185, 84],
+  'Bruno Fernandes': [179, 69], 'Kobbie Mainoo': [187, 72], 'Bryan Mbeumo': [172, 68],
+  'Benjamin Sesko': [195, 87], 'Matheus Cunha': [184, 80], 'Mason Mount': [180, 70],
+  'Diogo Dalot': [183, 75], 'Ayden Heaven': [188, 78],
+  // Barcelona
+  'Joan Garcia': [190, 84], 'Jules Kounde': [180, 75], 'Pau Cubarsi': [181, 74],
+  'Ronald Araujo': [188, 79], 'Alejandro Balde': [175, 70], 'Pedri': [174, 60],
+  'Frenkie de Jong': [180, 74], 'Dani Olmo': [179, 65], 'Lamine Yamal': [180, 69],
+  'Robert Lewandowski': [185, 81], 'Marcus Rashford': [180, 70], 'Gavi': [173, 64],
+  'Ferran Torres': [184, 73], 'Raphinha': [176, 69],
+  // Atletico Madrid
+  'Jan Oblak': [188, 87], 'Nahuel Molina': [175, 70], 'Jose Gimenez': [184, 79],
+  'Robin Le Normand': [186, 80], 'David Hancko': [186, 80], 'Pablo Barrios': [180, 68],
+  'Conor Gallagher': [180, 72], 'Thiago Almada': [168, 65], 'Giuliano Simeone': [176, 70],
+  'Julian Alvarez': [170, 71], 'Alexander Sorloth': [195, 90], 'Antoine Griezmann': [176, 73],
+  'Koke': [176, 74], 'Marcos Llorente': [186, 78],
+  // Inter Milan
+  'Yann Sommer': [183, 80], 'Denzel Dumfries': [188, 80], 'Alessandro Bastoni': [190, 85],
+  'Francesco Acerbi': [192, 84], 'Federico Dimarco': [175, 72], 'Hakan Calhanoglu': [178, 75],
+  'Nicolo Barella': [172, 68], 'Henrikh Mkhitaryan': [177, 75], 'Luis Henrique': [172, 68],
+  'Lautaro Martinez': [174, 72], 'Marcus Thuram': [192, 80], 'Davide Frattesi': [173, 68],
+  'Pio Esposito': [195, 85], 'Carlos Augusto': [176, 74],
+  // AC Milan
+  'Mike Maignan': [191, 92], 'Alexis Saelemaekers': [178, 73], 'Fikayo Tomori': [186, 85],
+  'Strahinja Pavlovic': [195, 88], 'Pervis Estupinan': [175, 73], 'Luka Modric': [172, 66],
+  'Youssouf Fofana': [186, 80], 'Adrien Rabiot': [188, 74], 'Christian Pulisic': [174, 68],
+  'Santiago Gimenez': [180, 75], 'Rafael Leao': [188, 81], 'Christopher Nkunku': [175, 71],
+  'Ruben Loftus-Cheek': [190, 87], 'Koni De Winter': [193, 85],
+  // Napoli
+  'Alex Meret': [190, 82], 'Giovanni Di Lorenzo': [183, 80], 'Amir Rrahmani': [195, 89],
+  'Alessandro Buongiorno': [187, 82], 'Mathias Olivera': [182, 78], 'Stanislav Lobotka': [172, 68],
+  'Kevin De Bruyne': [181, 76], 'Scott McTominay': [193, 88], 'Matteo Politano': [171, 66],
+  'Rasmus Hojlund': [191, 79], 'David Neres': [175, 68], 'Frank Anguissa': [190, 85],
+  'Romelu Lukaku': [191, 94], 'Juan Jesus': [189, 84],
+  // Al-Nassr
+  'Bento': [189, 84], 'Sultan Al-Ghannam': [178, 74], 'Inigo Martinez': [181, 78],
+  'Mohamed Simakan': [190, 82], 'Alex Telles': [172, 72], 'Marcelo Brozovic': [181, 78],
+  'Abdullah Al-Khaibari': [175, 70], 'Joao Felix': [181, 70], 'Kingsley Coman': [178, 74],
+  'Cristiano Ronaldo': [187, 85], 'Sadio Mane': [175, 69], 'Angelo Gabriel': [175, 68],
+  'Ayman Yahya': [176, 70], 'Nawaf Aqidi': [188, 82],
+  // Dortmund
+  'Gregor Kobel': [194, 91], 'Yan Couto': [172, 66], 'Nico Schlotterbeck': [191, 88],
+  'Waldemar Anton': [189, 82], 'Ramy Bensebaini': [189, 82], 'Marcel Sabitzer': [177, 74],
+  'Pascal Gross': [183, 75], 'Julian Brandt': [184, 75], 'Karim Adeyemi': [180, 73],
+  'Serhou Guirassy': [187, 82], 'Maximilian Beier': [183, 75], 'Felix Nmecha': [187, 78],
+  'Julien Duranville': [178, 68], 'Emre Can': [186, 83],
+  // LAFC
+  'Hugo Lloris': [188, 84], 'Ryan Hollingshead': [183, 77], 'Aaron Long': [190, 84],
+  'Eddie Segura': [183, 76], 'Marco Farfan': [173, 68], 'Timothy Tillman': [178, 72],
+  'Mark Delgado': [173, 68], 'Eduard Atuesta': [174, 68], 'Denis Bouanga': [173, 65],
+  'Nathan Ordaz': [178, 73], 'Son Heung-min': [183, 78], 'David Martinez': [172, 68],
+  'Frankie Amaya': [173, 68], 'Javairo Dilrosun': [178, 72],
+  // National-only (not already in a club roster above)
+  'Theo Hernandez': [184, 81], 'Emiliano Martinez': [195, 88], 'Cristian Romero': [185, 84],
+  'Nicolas Otamendi': [183, 81], 'Nicolas Tagliafico': [170, 65], 'Nico Paz': [180, 70],
+  'Danilo': [179, 78], 'Wendell': [172, 68], 'Bruno Guimaraes': [182, 74], 'Lucas Paqueta': [180, 72],
+  'Jordan Pickford': [185, 80], 'Marc Guehi': [187, 79], 'Adam Wharton': [180, 70],
+  'Anthony Gordon': [178, 70], 'Ollie Watkins': [180, 76],
+  'Diogo Costa': [186, 80], 'Joao Cancelo': [182, 75], 'Goncalo Inacio': [190, 82], 'Joao Palhinha': [190, 84],
+  'Jo Hyeon-woo': [189, 84], 'Seol Young-woo': [174, 70], 'Kim Ju-sung': [187, 78],
+  'Lee Myung-jae': [178, 72], 'Paik Seung-ho': [181, 74], 'Hwang In-beom': [180, 74],
+  'Hwang Hee-chan': [177, 73], 'Oh Hyeon-gyu': [187, 80], 'Lee Jae-sung': [176, 70],
+  'Cho Gue-sung': [188, 80], 'Bae Jun-ho': [178, 68],
+  // MARKET_POOL — non-enhanced stars outside the preset teams
+  'Nico Williams': [181, 71], 'Victor Osimhen': [185, 78], 'Neymar Jr': [175, 68],
+  'Karim Benzema': [185, 81], 'Toni Kroos': [183, 76], 'N Golo Kante': [168, 70],
+  'Sergio Ramos': [184, 82], 'Dusan Vlahovic': [190, 88], 'Federico Chiesa': [175, 70],
+  'Jack Grealish': [180, 71], 'Darwin Nunez': [187, 80],
+  // MARKET_POOL — enhanced-tier rows authored under a short/mononym name
+  // (e.g. "Haaland (Ultra)") rather than the full name used above — same
+  // real person, aliased here so the suffix-strip lookup still resolves.
+  'Mbappe': [178, 73], 'Haaland': [195, 88], 'Messi': [170, 72], 'Vinicius': [176, 73],
+  'Bellingham': [186, 75], 'Van Dijk': [195, 92], 'Neuer': [193, 92], 'Salah': [175, 71],
+  'Kane': [188, 89],
+  // MARKET_POOL — legends (enhanced/icon cards resolve to these via suffix-strip)
+  'Ronaldo R9': [183, 80], 'Zidane': [185, 80], 'Maradona': [165, 73], 'Pele': [173, 74],
+  'Ronaldinho': [181, 79], 'Andres Iniesta': [171, 68],
+  'Xavi Hernandez': [170, 68], 'Andrea Pirlo': [177, 68], 'Paolo Maldini': [186, 84],
+  'Franco Baresi': [176, 74], 'Franz Beckenbauer': [181, 75], 'Johan Cruyff': [178, 71],
+  'Eusebio': [174, 71], 'Alfredo Di Stefano': [178, 70], 'Ferenc Puskas': [172, 73],
+  'Garrincha': [169, 65], 'Zico': [172, 68], 'Romario': [169, 70], 'Cafu': [179, 76],
+  'Roberto Carlos': [168, 68], 'Marcelo': [175, 71], 'Philipp Lahm': [170, 66],
+  'Fabio Cannavaro': [176, 74], 'Rio Ferdinand': [189, 79], 'John Terry': [188, 90],
+  'Vincent Kompany': [191, 90], 'Steven Gerrard': [183, 79], 'Frank Lampard': [184, 82],
+  'Patrick Vieira': [192, 84], 'Michael Ballack': [189, 88], 'Xabi Alonso': [183, 82],
+  'David Beckham': [183, 74], 'Thierry Henry': [188, 82], 'Didier Drogba': [189, 88],
+  'Samuel Eto o': [180, 78], 'Wayne Rooney': [178, 84], 'Robin van Persie': [183, 74],
+  'Ruud van Nistelrooy': [186, 82], 'Gabriel Batistuta': [189, 85], 'David Villa': [175, 69],
+  'Alessandro Del Piero': [174, 70], 'Francesco Totti': [180, 77], 'Raul Gonzalez': [182, 73],
+  'Kaka': [186, 82], 'Michael Owen': [173, 68], 'Gianluigi Buffon': [192, 92],
+  'Iker Casillas': [185, 84], 'Peter Schmeichel': [191, 92], 'Oliver Kahn': [188, 90],
+};
+
 // Average height (cm) per position group — keepers/centre-backs/strikers
 // trend tallest, wide/attacking players trend shortest, roughly matching
 // real-world positional height distributions.
@@ -81,13 +234,21 @@ const HEIGHT_BASE = {
 
 // Deterministic height/weight/leadership, same stable-jitter approach as
 // buildAttributes — salts 101/102/103 keep them independent of the six core
-// attribute rolls (which use salts 1-6) and of each other.
+// attribute rolls (which use salts 1-6) and of each other. Real players
+// (see REAL_PHYSICAL above) use their actual measurements instead of the
+// archetype estimate — the estimate is a fallback for dynamically-fetched
+// rosters that were never hand-verified.
 function buildPhysical(name, pos) {
+  const baseName = String(name).trim().replace(/\s*\([^)]*\)\s*$/, '');
+  const real = REAL_PHYSICAL[baseName];
+  const leadership = seededRand(name + pos, 103) < 0.12; // ~12% of players
+  if (real) {
+    return { height: real[0], weight: real[1], leadership };
+  }
   const base = HEIGHT_BASE[pos] || HEIGHT_BASE.CM;
   const height = Math.round(base + (seededRand(name + pos, 101) * 14 - 7)); // ±7cm
   // athletic-build heuristic tied to height, not just a free-floating roll
   const weight = Math.round((height - 100) * 0.92 + (seededRand(name + pos, 102) * 10 - 4)); // -4..+6
-  const leadership = seededRand(name + pos, 103) < 0.12; // ~12% of players
   return { height, weight, leadership };
 }
 
