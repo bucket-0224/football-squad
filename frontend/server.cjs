@@ -21,6 +21,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
+  '.mobileconfig': 'application/x-apple-aspen-config',
 };
 
 // Player/team images never change in place (a new player only ever adds a
