@@ -67,10 +67,35 @@ export function fitByBand(pos: string, band: Band): [string, string] {
   return ['fit-bad', '부적합'];
 }
 
-// 밴드에 맞지 않으면 OVR만 깎는다 — 기존 convertedCard와 달리 카드의 포지션
-// 표기(pos)는 슬롯 라벨로 바꿔치지 않고 선수 본인의 실제 포지션 그대로 둔다.
-export function convertedCardByBand<T extends { pos: string; ovr: number }>(p: T, band: Band): T {
+// 밴드(y) 안에서도 왼쪽/중앙/오른쪽 중 어디인지(x)로 구체적인 포지션 라벨을
+// 정한다 — 카드에 표시되는 "지금 이 자리가 실제로 무슨 포지션인지"용이며,
+// 적합도/OVR 페널티 계산(bandPenalty, 선수 본인의 실제 포지션 기준)과는
+// 완전히 별개다.
+const ZONE_LABEL: Record<1 | 2 | 3 | 4, { left: string; center: string; right: string }> = {
+  1: { left: 'LW', center: 'ST', right: 'RW' },
+  2: { left: 'LM', center: 'CAM', right: 'RM' },
+  3: { left: 'LWB', center: 'CDM', right: 'RWB' },
+  4: { left: 'LB', center: 'CB', right: 'RB' },
+};
+
+function xZone(x: number): 'left' | 'center' | 'right' {
+  if (x < 33) return 'left';
+  if (x >= 67) return 'right';
+  return 'center';
+}
+
+export function slotPositionLabel(x: number, y: number): string {
+  const band = bandOfY(y);
+  if (band === 5) return 'GK';
+  return ZONE_LABEL[band][xZone(x)];
+}
+
+// 카드에 실제로 보여줄 형태를 만든다 — 포지션 라벨은 지금 놓인 자리(x,y)를
+// 그대로 반영하고, OVR은 선수 본인의 실제 포지션이 그 라인에 맞는지에 따라
+// 깎인다(맞으면 그대로). 즉 라벨은 "여기 서면 무슨 포지션"이고 OVR은 "이
+// 선수가 거기 서면 실력이 얼마나 나오는지" — 서로 다른 걸 나타낸다.
+export function convertedCardByBand<T extends { pos: string; ovr: number }>(p: T, x: number, y: number): T {
+  const band = bandOfY(y);
   const pen = bandPenalty(p.pos, band);
-  if (!pen) return p;
-  return { ...p, ovr: Math.max(30, p.ovr - pen) };
+  return { ...p, pos: slotPositionLabel(x, y), ovr: pen ? Math.max(30, p.ovr - pen) : p.ovr };
 }

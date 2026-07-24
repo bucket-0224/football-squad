@@ -176,15 +176,29 @@ function db() {
   return d;
 }
 
-// The selectable list is static — no network, no free-tier caps. Badges come
-// from the warmed cache and fill in progressively.
+// Best-XI-style average (mirrors players.teamList()'s curated-team OVR):
+// top 11 by OVR, averaged. Dynamic rosters aren't stored in strength order
+// like curated playerIds are, so sort first instead of just slicing.
+function rosterOvr(def) {
+  if (!def || !Array.isArray(def.players) || !def.players.length) return null;
+  const top11 = [...def.players].sort((a, b) => (b.ovr || 0) - (a.ovr || 0)).slice(0, 11);
+  return Math.round(top11.reduce((s, p) => s + (p.ovr || 0), 0) / top11.length);
+}
+
+// The selectable list is static — no network, no free-tier caps. Badges and
+// OVR come from the warmed cache (badge from dynMeta, OVR from a roster
+// already fetched into dynRosters) and fill in progressively as teams get
+// registered/warmed; unwarmed teams show no OVR yet (frontend falls back to
+// "실제 스쿼드").
 function listSelectable() {
-  const meta = db().dynMeta;
+  const d = db();
+  const meta = d.dynMeta;
   const out = [];
   Object.entries(LEAGUE_TEAMS).forEach(([league, names]) => {
     names.forEach((name) => {
       const m = meta[norm(name)];
-      out.push({ name, league, logo: (m && m.badge) || null });
+      const ovr = rosterOvr(d.dynRosters[norm(name)]);
+      out.push({ name, league, logo: (m && m.badge) || null, ovr });
     });
   });
   return out;

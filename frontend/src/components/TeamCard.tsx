@@ -27,7 +27,9 @@ export default function TeamCard({
         <span className="t-name-text">{team.name}</span>
       </span>
       <span className="t-meta">
-        {team.dyn ? '클럽 · 실제 스쿼드' : `${team.type === 'club' ? '클럽' : '국가대표'} · OVR ${team.ovr}`}
+        {team.ovr != null
+          ? `${team.type === 'club' ? '클럽' : '국가대표'} · OVR ${team.ovr}`
+          : '클럽 · 실제 스쿼드'}
       </span>
       {extraTag ? <span className="starter-tag">{extraTag}</span> : null}
     </button>

@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
 import { activeRatings, activeSquad, upgradedCard } from '../../game/cards';
 import { COORDS } from '../../game/formationCoords';
-import { BAND_LABEL, bandOfY, convertedCardByBand } from '../../game/bands';
+import { BAND_LABEL, bandOfY, convertedCardByBand, slotPositionLabel } from '../../game/bands';
 import PlayerCard, { EmptySlotCard } from '../PlayerCard';
 import OwnedList from '../OwnedList';
 import PickerModal from '../PickerModal';
@@ -494,7 +494,11 @@ export default function SquadTab() {
                       else if (!posMode && p) beginDrag(p.id, p, e.clientX, e.clientY);
                     }}
                   >
-                    {p ? <PlayerCard player={convertedCardByBand(p, band)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
+                    {p ? (
+                      <PlayerCard player={convertedCardByBand(p, x, y)} size="xs" badge={badge} />
+                    ) : (
+                      <EmptySlotCard pos={pos === 'GK' ? 'GK' : slotPositionLabel(x, y)} />
+                    )}
                   </button>
                   {posMode && <span className="slot-band-tag">{BAND_LABEL[band]}</span>}
                   {p && (
