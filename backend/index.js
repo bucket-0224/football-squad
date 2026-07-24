@@ -717,6 +717,28 @@ app.post('/api/admin/delete-user', (req, res) => {
   res.json({ ok: true, username: username.trim() });
 });
 
+// Admin-only: fetch+cache a dynamic team's roster (so its OVR shows up in
+// /api/leagueteams) without creating a throwaway user account for it.
+// Same protection/call shape as the other /api/admin/* routes:
+//   curl -X POST $API_BASE/api/admin/warm-team -H "x-admin-key: $ADMIN_KEY" \
+//     -H "Content-Type: application/json" -d '{"team":"Aston Villa"}'
+app.post('/api/admin/warm-team', async (req, res) => {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) return bad(res, 503, '관리자 기능이 비활성화되어 있습니다 (ADMIN_KEY 미설정).');
+  const provided = req.headers['x-admin-key'];
+  if (!provided || !timingSafeEqual(provided, adminKey)) {
+    return bad(res, 401, '관리자 인증 실패.');
+  }
+  const { team } = req.body || {};
+  if (!team || typeof team !== 'string') return bad(res, 400, '팀 이름을 입력해 주세요.');
+  try {
+    const name = await dynteams.ensureRoster(team.trim());
+    res.json({ ok: true, team: name });
+  } catch (err) {
+    bad(res, 502, err.message);
+  }
+});
+
 // ---- 시즌 --------------------------------------------------------------------
 
 app.get('/api/season', (req, res) => {
