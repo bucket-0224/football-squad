@@ -73,7 +73,7 @@ export default function AuthView() {
             회원가입
           </button>
         </div>
-        <form onSubmit={onSubmit} autoComplete="off">
+        <form id="auth-form" onSubmit={onSubmit} autoComplete="off">
           <input
             placeholder="아이디 (2~16자)"
             maxLength={16}

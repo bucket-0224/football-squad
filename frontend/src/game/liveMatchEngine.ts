@@ -879,6 +879,16 @@ export class LiveMatchEngine {
       this.takeover(e.team, this.nearest(e.team, this.ball.x, this.ball.y));
       this.passTimer = 0.3;
     }
+
+    // Sync the on-pitch carrier to whichever sprite the backend actually
+    // credited for this event (e.player). Without this, the pitch keeps
+    // showing whoever the frontend's own ball-carrier AI happened to have
+    // dribbling — a system with no notion of "who this event is about" —
+    // while the feed/banner name a specific (usually different) player.
+    if (e.player) {
+      const named = this.team(e.team).find((pl) => !pl.off && !pl.gk && pl.label === vizShortName(e.player));
+      if (named) this.carrier = named;
+    }
   }
 
   private shoot(atk: AttackState) {
@@ -893,7 +903,14 @@ export class LiveMatchEngine {
     const done = () => {
       this.attack = null;
     };
-    const shooter = this.carrier || this.team(side)[9] || this.team(side)[8];
+    // Prefer the sprite that actually matches the backend-computed scorer
+    // (e.player) — falling back to "whoever's currently carrying" only if
+    // that name can't be found on the pitch (e.g. an edge-case timing gap).
+    // Without this, a penalty/free kick/corner ceremony would show whoever
+    // happened to be dribbling standing over the ball while the feed/toast
+    // announce a completely different player's name.
+    const namedShooter = this.team(side).find((pl) => !pl.off && !pl.gk && pl.label === vizShortName(e.player));
+    const shooter = namedShooter || this.carrier || this.team(side)[9] || this.team(side)[8];
     const shotSpd = Math.round(600 * ((shooter && shooter.shotMul) || 1));
     this.runner = null;
 
@@ -1249,7 +1266,13 @@ export class LiveMatchEngine {
           this.say(`🟥 ${this.name(dot)} 퇴장! 팀은 10명으로 싸웁니다`);
           this.banner(`🟥 레드카드 — ${d.e.player}`, 'red', 3000);
         } else if (d.e.type === 'card') {
-          this.say(`${this.name(d.chaser ?? null)}의 거친 태클 — 휘슬이 울립니다`);
+          // the small commentary line and the banner named different players
+          // before — chaser (nearest defender) vs d.e.player (actually
+          // booked) — match by name here too so both agree.
+          const booked =
+            this.team(d.e.team).find((pl) => !pl.off && !pl.gk && pl.label === vizShortName(d.e.player)) ||
+            d.chaser;
+          this.say(`${this.name(booked ?? null)}의 거친 태클 — 휘슬이 울립니다`);
           this.banner(`🟨 옐로카드 — ${d.e.player}`, 'yellow', 2200);
         } else {
           this.say(`${this.name(d.chaser ?? null)}의 거친 태클 — 휘슬이 울립니다`);
@@ -1294,7 +1317,13 @@ export class LiveMatchEngine {
       const stallAt = this.attack.e.type === 'corner' ? -8 : -2;
       if (this.attack.timeLeft <= stallAt && !this.script.length) this.shoot(this.attack);
     } else if (!this.script.length && !this.kickoff && !this.paused && !this.duel) {
-      if (this.pendingHalf && (!this.queue.length || this.queue[0].minute > 45)) {
+      // dispMin >= 45: the queue draining past 45 isn't enough on its own —
+      // the on-screen minute counter climbs toward its target at a fixed
+      // rate independent of the queue, so without this gate the halftime
+      // banner could fire while the visible clock still reads well under 45
+      // (e.g. "40'") whenever the first half had few enough events that the
+      // queue empties before the counter animation catches up.
+      if (this.pendingHalf && (!this.queue.length || this.queue[0].minute > 45) && this.dispMin >= 45) {
         this.pendingHalf = false;
         if (this.pendingHalfText) {
           this.cb.onFeedItem('', this.pendingHalfText, 'phase');

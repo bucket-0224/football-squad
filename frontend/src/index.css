@@ -72,7 +72,7 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .auth-card h1 { font-size: 28px; text-align: center; }
 .tagline { text-align: center; color: var(--dim); margin: 8px 0 20px; font-size: 14px; }
-.auth-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.auth-tabs { display: flex; gap: 8px; margin: 22px 0 20px; }
 .auth-tabs button {
   flex: 1; padding: 10px; border-radius: 8px;
   background: transparent; border: 1px solid var(--border); color: var(--dim);
@@ -105,7 +105,7 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .club-name { font-size: 20px; font-weight: 800; }
 .club-info { display: flex; align-items: center; gap: 10px; }
-.hdr-right { display: flex; align-items: center; gap: 8px; }
+.hdr-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .chip {
   background: var(--panel2); border: 1px solid var(--border);
   border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 700;
@@ -113,8 +113,20 @@ input:focus, select:focus { border-color: var(--blue); }
 .ovr-chip { color: var(--gold); }
 .coin-chip { color: var(--gold); }
 .point-chip { color: var(--blue); }
+/* 모바일: 클럽명/칩/알림 버튼이 한 화면(아이폰15 393px 등)에 조밀하게
+   들어가도록 축소 — 전체 레이아웃(flex-wrap)은 유지하되 각 요소를 줄인다 */
+@media (max-width: 480px) {
+  #topbar { padding: 10px 0; gap: 6px; }
+  .club-name { font-size: 16px; }
+  .club-info { gap: 6px; }
+  .chip { font-size: 11px; padding: 4px 8px; }
+  .hdr-right { gap: 5px; }
+  .hdr-right .btn.ghost.small { padding: 5px 8px; font-size: 12px; }
+}
 
-#main-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+#main-tabs {
+  display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px;
+}
 #main-tabs button {
   background: none; border: none; color: var(--dim);
   padding: 10px 16px; font-size: 14px; font-weight: 700;
@@ -122,13 +134,18 @@ input:focus, select:focus { border-color: var(--blue); }
   white-space: nowrap;
 }
 #main-tabs button.active { color: var(--text); border-bottom-color: var(--green); }
-/* 모바일: 탭 6개가 한 줄에 들어가도록 축소 */
+/* 모바일: 탭 7개가 좁은 화면에서도 절대 깨지지 않도록 — 우선 축소하고,
+   그래도 다 안 들어가면 줄바꿈 대신 가로 스크롤로 흘려보낸다 (한 줄 유지) */
 @media (max-width: 640px) {
-  #main-tabs { gap: 0; }
-  #main-tabs button { font-size: 12px; padding: 9px 7px; letter-spacing: -0.3px; }
+  #main-tabs {
+    gap: 0; flex-wrap: nowrap; overflow-x: auto;
+    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+  }
+  #main-tabs::-webkit-scrollbar { display: none; }
+  #main-tabs button { font-size: 12px; padding: 9px 7px; letter-spacing: -0.3px; flex-shrink: 0; }
 }
-@media (max-width: 380px) {
-  #main-tabs button { font-size: 11px; padding: 8px 5px; }
+@media (max-width: 420px) {
+  #main-tabs button { font-size: 11px; padding: 8px 6px; }
 }
 
 /* ===== squad ===== */
@@ -591,7 +608,7 @@ input:focus, select:focus { border-color: var(--blue); }
 .mail-item.claimed { opacity: .55; }
 #mail-list:empty::after { content: '받은 우편이 없습니다.'; color: var(--dim); font-size: 13px; }
 
-#picker-overlay, #club-overlay, #mail-overlay, #oppo-overlay, #complaints-overlay, #transfer-requests-overlay {
+#picker-overlay, #club-overlay, #mail-overlay, #oppo-overlay, #notifications-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px;
 }

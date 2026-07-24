@@ -1,19 +1,16 @@
 import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import MailboxModal from './MailboxModal';
-import ComplaintsModal from './ComplaintsModal';
-import TransferRequestModal from './TransferRequestModal';
+import NotificationsModal from './NotificationsModal';
 
 export default function Header() {
   const { me, logout } = useAppStore();
   const [mailOpen, setMailOpen] = useState(false);
-  const [complaintsOpen, setComplaintsOpen] = useState(false);
-  const [transferOpen, setTransferOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   if (!me) return null;
 
   const unclaimed = (me.mailbox || []).filter((m) => !m.claimed).length;
-  const pendingComplaints = (me.complaints || []).length;
-  const pendingTransferRequests = (me.transferRequests || []).length;
+  const pendingNotifs = (me.complaints || []).length + (me.transferRequests || []).length;
 
   return (
     <header id="topbar">
@@ -27,19 +24,15 @@ export default function Header() {
         <button type="button" className="btn ghost small mailbox-btn" onClick={() => setMailOpen(true)}>
           ✉️ <span className={'mailbox-badge' + (unclaimed ? '' : ' hidden')}>{unclaimed}</span>
         </button>
-        <button type="button" className="btn ghost small mailbox-btn" onClick={() => setComplaintsOpen(true)}>
-          😠 <span className={'mailbox-badge' + (pendingComplaints ? '' : ' hidden')}>{pendingComplaints}</span>
-        </button>
-        <button type="button" className="btn ghost small mailbox-btn" onClick={() => setTransferOpen(true)}>
-          ✈️ <span className={'mailbox-badge' + (pendingTransferRequests ? '' : ' hidden')}>{pendingTransferRequests}</span>
+        <button type="button" className="btn ghost small mailbox-btn" onClick={() => setNotifOpen(true)}>
+          🔔 <span className={'mailbox-badge' + (pendingNotifs ? '' : ' hidden')}>{pendingNotifs}</span>
         </button>
         <button type="button" className="btn ghost small" onClick={logout}>
           로그아웃
         </button>
       </div>
       {mailOpen && <MailboxModal onClose={() => setMailOpen(false)} />}
-      {complaintsOpen && <ComplaintsModal onClose={() => setComplaintsOpen(false)} />}
-      {transferOpen && <TransferRequestModal onClose={() => setTransferOpen(false)} />}
+      {notifOpen && <NotificationsModal onClose={() => setNotifOpen(false)} />}
     </header>
   );
 }

@@ -1,11 +1,10 @@
-import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { toast } from '../store/useToastStore';
 import PlayerCard from './PlayerCard';
 import { upgradedCard } from '../game/cards';
 import type { TransferRequest } from '../types';
 
-function TransferRequestDetail({ request, onClose }: { request: TransferRequest; onClose: () => void }) {
+export default function TransferRequestDetail({ request, onClose }: { request: TransferRequest; onClose: () => void }) {
   const { me, catalog, resolveTransferRequest } = useAppStore();
   if (!me) return null;
   const p = catalog.get(request.playerId);
@@ -53,53 +52,6 @@ function TransferRequestDetail({ request, onClose }: { request: TransferRequest;
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-export default function TransferRequestModal({ onClose }: { onClose: () => void }) {
-  const { me, catalog } = useAppStore();
-  const [active, setActive] = useState<TransferRequest | null>(null);
-  if (!me) return null;
-
-  const requests = [...(me.transferRequests || [])].sort((a, b) => b.createdAt - a.createdAt);
-
-  return (
-    <div
-      id="transfer-requests-overlay"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="picker-modal">
-        <div className="picker-head">
-          <span>✈️ 이적 요청</span>
-          <button type="button" className="btn ghost small" onClick={onClose}>
-            닫기
-          </button>
-        </div>
-        <div id="transfer-requests-list">
-          {!requests.length ? (
-            <p className="dim">이적을 요청한 선수가 없습니다.</p>
-          ) : (
-            requests.map((r) => {
-              const p = catalog.get(r.playerId);
-              return (
-                <div className="mail-item" key={r.id}>
-                  <div className="mail-body">
-                    <div className="mail-msg">{p ? p.name : '선수'} — 이적을 요청합니다</div>
-                    <div className="mail-date">{new Date(r.createdAt).toLocaleString()}</div>
-                  </div>
-                  <button type="button" className="btn small primary" onClick={() => setActive(r)}>
-                    확인
-                  </button>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-      {active && <TransferRequestDetail request={active} onClose={() => setActive(null)} />}
     </div>
   );
 }
