@@ -26,7 +26,14 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   if (!res.ok) {
     // a stale/invalid token is worthless to keep around — matches the
     // vanilla app's api() helper, which cleared it on the same condition.
-    if (res.status === 401) setToken(null);
+    // The store listens for this event to also drop `me`, so a token that
+    // dies mid-session (expiry, server restart, revocation) kicks the user
+    // back to the login screen instead of leaving the app shell up while
+    // every subsequent request silently fails.
+    if (res.status === 401) {
+      setToken(null);
+      window.dispatchEvent(new Event('fs:auth-expired'));
+    }
     throw new ApiError(data.error || '요청에 실패했습니다.');
   }
   return data as T;

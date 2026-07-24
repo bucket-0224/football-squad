@@ -713,7 +713,7 @@ input:focus, select:focus { border-color: var(--blue); }
   font-size: 10px; font-weight: 800; line-height: 1;
   padding: 3px 5px; min-width: 14px; text-align: center;
 }
-#mail-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+#mail-list, #notifications-list { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .mail-item {
   background: var(--panel2); border: 1px solid var(--border); border-radius: 10px;
   padding: 12px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px;

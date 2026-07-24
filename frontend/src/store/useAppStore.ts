@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api, getToken, setToken } from '../api/client';
 import { activeSquad } from '../game/cards';
+import { toast } from './useToastStore';
 import type { Bootstrap, CatalogPlayer, Team, User } from '../types';
 
 export type AuthMode = 'login' | 'register';
@@ -239,3 +240,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ me: user });
   },
 }));
+
+// client.ts fires this on any 401 (token missing/expired/invalidated
+// server-side). Dropping `me` here — not just the token — is what actually
+// sends the app back to the login screen: App.tsx gates on `me`, and
+// clearing only the token left the logged-in shell up with every further
+// request failing silently.
+window.addEventListener('fs:auth-expired', () => {
+  if (!useAppStore.getState().me) return; // already logged out, avoid a duplicate toast
+  toast('세션이 만료되어 다시 로그인해주세요.');
+  useAppStore.setState({ token: null, me: null });
+});
