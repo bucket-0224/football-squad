@@ -66,40 +66,42 @@ function BoardSub({ onViewSquad }: { onViewSquad: (username: string) => void }) 
     <div className="rank-layout">
       <div>
         <h3>🏆 랭킹</h3>
-        <table className="data-table" id="leaderboard-table">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>구단</th>
-              <th>승점</th>
-              <th>승-무-패</th>
-              <th>OVR</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {leaderboard.map((row, i) => (
-              <tr key={row.username} style={row.username === me.username ? { color: 'var(--gold)' } : undefined}>
-                <td>{i + 1}</td>
-                <td>
-                  {row.clubName} <span className="dim small-text">({row.username})</span>
-                </td>
-                <td className="num">{row.points}</td>
-                <td>
-                  {row.record.w}-{row.record.d}-{row.record.l}
-                </td>
-                <td>{row.ovr}</td>
-                <td>
-                  {row.username !== me.username && (
-                    <button type="button" className="btn ghost small" onClick={() => onViewSquad(row.username)}>
-                      🔍 스쿼드
-                    </button>
-                  )}
-                </td>
+        <div className="table-scroll">
+          <table className="data-table" id="leaderboard-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>구단</th>
+                <th>승점</th>
+                <th>승-무-패</th>
+                <th>OVR</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {leaderboard.map((row, i) => (
+                <tr key={row.username} style={row.username === me.username ? { color: 'var(--gold)' } : undefined}>
+                  <td>{i + 1}</td>
+                  <td>
+                    {row.clubName} <span className="dim small-text">({row.username})</span>
+                  </td>
+                  <td className="num">{row.points}</td>
+                  <td>
+                    {row.record.w}-{row.record.d}-{row.record.l}
+                  </td>
+                  <td>{row.ovr}</td>
+                  <td className="col-squad-btn">
+                    {row.username !== me.username && (
+                      <button type="button" className="btn ghost small" onClick={() => onViewSquad(row.username)}>
+                        🔍 스쿼드
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
       <div>
         <h3>📋 최근 경기</h3>
