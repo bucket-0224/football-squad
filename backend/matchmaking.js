@@ -7,6 +7,12 @@ const auth = require('./auth');
 const players = require('./data/players');
 const { FORMATIONS, DEFAULT_FORMATION, LINE, posPenalty } = require('./game/formations');
 const { simulateMatch, simulateRemainder, TACTICS } = require('./game/simulate');
+const { pickReferee } = require('./referees');
+
+// 경기 시작 전 심판 프리뷰 팝업에서 "시작" 버튼을 누를 때까지 실제 시뮬레이션
+// 틱을 미룬다. 상대(사람)가 안 눌러도 무한정 기다리지 않도록 안전장치로 이
+// 시간이 지나면 강제로 시작한다.
+const READY_TIMEOUT_MS = 20 * 1000;
 
 // 1 simulated minute per tick → a full match streams in ~1 minute,
 // slow enough for the client top-view to animate every event.
@@ -246,6 +252,17 @@ function attach(server) {
         leaveSpectate(ws);
         break;
       }
+      // 경기 시작 전 심판 프리뷰 팝업에서 "시작"을 눌렀다는 신호 — 두 사람
+      // 다(또는 AI전이면 혼자) 준비되면 실제 시뮬레이션 틱을 시작한다.
+      case 'ready': {
+        const ctx = active.get(ws.userId);
+        if (!ctx || ctx.interval) break; // 이미 시작됐으면 무시
+        const side = sideOf(ctx, ws.userId);
+        if (side === 'home') ctx.readyHome = true;
+        else ctx.readyAway = true;
+        if (ctx.readyHome && ctx.readyAway) beginTicking(ctx);
+        break;
+      }
       case 'pause': {
         const ctx = active.get(ws.userId);
         if (!ctx || ctx.paused) return send(ws, { type: 'error', error: '지금은 작전 타임을 요청할 수 없습니다.' });
@@ -439,14 +456,23 @@ function attach(server) {
     if (!home || !away) return;
     const hs = liveSquad(home, home.pvpSquad);
     const as = liveSquad(away, away.pvpSquad);
-    const result = simulateMatch(hs, as, home.clubName, away.clubName);
+    const referee = pickReferee();
+    const result = simulateMatch(hs, as, home.clubName, away.clubName, { cardBias: referee.cardBias });
     runMatch({
       mode: 'pvp',
       result,
+      referee,
       squads: { home: hs, away: as },
-      home: { ws: homeWs, user: home, name: home.clubName, lineup: lineupOf(hs) },
-      away: { ws: awayWs, user: away, name: away.clubName, lineup: lineupOf(as) },
+      home: { ws: homeWs, user: home, name: home.clubName, logo: teamLogo(home.baseTeam), lineup: lineupOf(hs) },
+      away: { ws: awayWs, user: away, name: away.clubName, logo: teamLogo(away.baseTeam), lineup: lineupOf(as) },
     });
+  }
+
+  // 심판 프리뷰 팝업에 쓸 로고 — 큐레이션 팀 기준(동적으로 불러온 팀은
+  // 아직 여기서 안 찾는다, null이면 프론트가 이모지로 대신 보여준다).
+  function teamLogo(teamName) {
+    const t = teamName && players.TEAMS[teamName];
+    return (t && t.logo) || null;
   }
 
   function startAi(ws) {
@@ -463,13 +489,15 @@ function attach(server) {
     };
     const us = liveSquad(user, user.squad);
     const aiName = `${team.name} (AI)`;
-    const result = simulateMatch(us, aiSquad, user.clubName, aiName);
+    const referee = pickReferee();
+    const result = simulateMatch(us, aiSquad, user.clubName, aiName, { cardBias: referee.cardBias });
     runMatch({
       mode: 'ai',
       result,
+      referee,
       squads: { home: us, away: aiSquad },
-      home: { ws, user, name: user.clubName, lineup: lineupOf(us) },
-      away: { ws: null, user: null, name: aiName, lineup: lineupOf(aiSquad) },
+      home: { ws, user, name: user.clubName, logo: teamLogo(user.baseTeam), lineup: lineupOf(us) },
+      away: { ws: null, user: null, name: aiName, logo: team.logo || null, lineup: lineupOf(aiSquad) },
     });
   }
 
@@ -490,15 +518,17 @@ function attach(server) {
   }
 
   function runMatch(ctx) {
-    const { result, home, away, mode } = ctx;
+    const { result, home, away, mode, referee } = ctx;
     if (home.user) playing.add(home.user.id);
     if (away.user) playing.add(away.user.id);
 
     const startMsg = {
       type: 'match_start',
       mode,
+      referee,
       home: {
         name: home.name,
+        logo: home.logo || null,
         ratings: ratingSummary(result.ratings.home),
         tactic: result.tactics.home,
         tacticName: tacticName(result.tactics.home),
@@ -506,6 +536,7 @@ function attach(server) {
       },
       away: {
         name: away.name,
+        logo: away.logo || null,
         ratings: ratingSummary(result.ratings.away),
         tactic: result.tactics.away,
         tacticName: tacticName(result.tactics.away),
@@ -542,6 +573,19 @@ function attach(server) {
     live.set(ctx.id, ctx);
     if (home.user) active.set(home.user.id, ctx);
     if (away.user) active.set(away.user.id, ctx);
+
+    // 심판 프리뷰 팝업에서 "시작"을 누를 때까지 틱을 미룬다 — AI 상대는
+    // 사람이 아니므로 그쪽은 처음부터 준비된 것으로 취급한다. 상대가 안
+    // 누르는 경우(연결 끊김 등)에 경기가 영영 안 시작되지 않도록
+    // READY_TIMEOUT_MS 뒤엔 강제로 시작한다.
+    ctx.readyHome = false;
+    ctx.readyAway = !away.user;
+    ctx.readyTimeout = setTimeout(() => beginTicking(ctx), READY_TIMEOUT_MS);
+  }
+
+  function beginTicking(ctx) {
+    if (ctx.interval) return; // already started (ready from both sides, or timeout already fired)
+    clearTimeout(ctx.readyTimeout);
     ctx.interval = setInterval(() => stepMatch(ctx), TICK_MS);
   }
 
@@ -553,7 +597,12 @@ function attach(server) {
     events.forEach((e) => {
       if (e.type === 'goal') ctx.score = e.score;
       sockets.forEach((s) => send(s, { type: 'event', event: e }));
-      if (e.type === 'injury' || e.type === 'strop') triggerMedicalTimeout(ctx, e.team, e);
+      // 경미한 부상은 그냥 잠깐 빠졌다 돌아오는 걸로 처리(프론트가 알아서
+      // 몇 초 뒤 복귀시킨다) — 강제 교체 프롬프트(medical timeout)는 실제로
+      // 못 뛰게 되는 중상/태업일 때만 띄운다.
+      if (e.type === 'strop' || (e.type === 'injury' && e.severity === 'major')) {
+        triggerMedicalTimeout(ctx, e.team, e);
+      }
     });
     sockets.forEach((s) => send(s, { type: 'tick', minute: ctx.minute, display, score: ctx.score }));
     if (ctx.minute === 45) {
@@ -656,6 +705,9 @@ function attach(server) {
       outcome: reward ? reward.outcome : null,
       reward: reward ? { coins: reward.coins, points: reward.points } : null,
       balance: reward ? reward.balance : null,
+      // 프론트가 90+추가시간이 실제로 다 지나기 전에 종료 팝업을 띄우지
+      // 않도록 서버가 정한 "진짜 끝나는 분"을 같이 보낸다.
+      finalMinute: 90 + (ctx.stoppage || 0),
     });
     send(home.ws, resultMsg(home, homeReward));
     send(away.ws, resultMsg(away, awayReward));

@@ -69,6 +69,7 @@ export default function MatchTab({ visible }: { visible: boolean }) {
   const [pauseStatus, setPauseStatus] = useState('');
   const [pausePanelOpen, setPausePanelOpen] = useState(false);
   const [resultMsg, setResultMsg] = useState<ResultMsg | null>(null);
+  const [previewMsg, setPreviewMsg] = useState<MatchStartAll | null>(null);
 
   const [pauseFormation, setPauseFormation] = useState('4-3-3');
   const [pauseStarters, setPauseStarters] = useState<(string | null)[]>([]);
@@ -114,9 +115,15 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           setMatchError(String(msg.error));
           toast(String(msg.error));
           break;
-        case 'match_start':
-          startLiveMatch(msg as unknown as MatchStartAll);
+        case 'match_start': {
+          const startAll = msg as unknown as MatchStartAll;
+          if (startAll.spectate) {
+            startLiveMatch(startAll);
+          } else {
+            setPreviewMsg(startAll);
+          }
           break;
+        }
         case 'spectate_list':
           setSpectateList((msg.matches as SpectateRow[]) || []);
           break;
@@ -232,6 +239,7 @@ export default function MatchTab({ visible }: { visible: boolean }) {
     spectate?: boolean;
     youAre?: 'home' | 'away';
     mode?: string;
+    referee?: { name: string; trait: string } | null;
     home: MatchStartMsg['home'] & { name: string; tacticName?: string };
     away: MatchStartMsg['away'] & { name: string; tacticName?: string };
     possession: { home: number; away: number };
@@ -276,6 +284,14 @@ export default function MatchTab({ visible }: { visible: boolean }) {
     } else {
       showBanner(`📣 경기 시작! ${msg.home.name} vs ${msg.away.name}`, 'phase');
     }
+  }
+
+  function confirmMatchStart() {
+    if (!previewMsg) return;
+    const m = previewMsg;
+    setPreviewMsg(null);
+    startLiveMatch(m);
+    sendWs({ type: 'ready' });
   }
 
   async function handleResult(msg: ResultMsg) {
@@ -362,6 +378,40 @@ export default function MatchTab({ visible }: { visible: boolean }) {
 
   return (
     <div id="tab-match" className={'tab-panel' + (visible ? '' : ' hidden')}>
+      {previewMsg && (
+        <div id="ref-preview-overlay">
+          <div className="nego-modal ref-preview-modal">
+            <div className="ref-preview-teams">
+              <div className="ref-preview-team">
+                {previewMsg.home.logo ? (
+                  <img className="ref-preview-logo" src={previewMsg.home.logo} alt="" />
+                ) : (
+                  <div className="ref-preview-logo ref-preview-logo-fallback">⚽</div>
+                )}
+                <span className="ref-preview-team-name">{previewMsg.home.name}</span>
+              </div>
+              <span className="ref-preview-vs">VS</span>
+              <div className="ref-preview-team">
+                {previewMsg.away.logo ? (
+                  <img className="ref-preview-logo" src={previewMsg.away.logo} alt="" />
+                ) : (
+                  <div className="ref-preview-logo ref-preview-logo-fallback">⚽</div>
+                )}
+                <span className="ref-preview-team-name">{previewMsg.away.name}</span>
+              </div>
+            </div>
+            {previewMsg.referee && (
+              <div className="ref-preview-referee">
+                <div className="ref-preview-referee-name">🧑‍⚖️ {previewMsg.referee.name}</div>
+                <p className="dim small-text ref-preview-referee-trait">{previewMsg.referee.trait}</p>
+              </div>
+            )}
+            <button type="button" className="btn primary big ref-preview-start" onClick={confirmMatchStart}>
+              시작
+            </button>
+          </div>
+        </div>
+      )}
       <div id="match-lobby" className={view === 'lobby' ? '' : 'hidden'}>
         <div className="lobby-card">
           <h2>⚔️ 실시간 대전</h2>

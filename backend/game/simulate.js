@@ -317,6 +317,9 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   const fromMinute = opts.fromMinute || 0;
   const base = opts.baseScore || { home: 0, away: 0 };
   const frac = Math.max(0, (90 - fromMinute) / 90);
+  // 경기 전 프리뷰에서 고른 심판 성향 — 1.0이 기준, 엄격할수록 카드가
+  // 늘고 관대할수록 준다. 파울/카드 관련 확률에만 곱한다.
+  const cardBias = opts.cardBias || 1;
   const home = computeRatings(homeSquad);
   const away = computeRatings(awaySquad);
 
@@ -383,6 +386,27 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
           Math.random() < 0.15
             ? `핸드볼 반칙 — ${who}의 팀이 프리킥을 얻습니다`
             : `파울! ${who}에게 프리킥이 주어집니다`;
+        // 약한 태클이라도 심판 재량으로 낮은 확률에 옐로카드가 나올 수
+        // 있다 — 반칙을 저지른 쪽(상대팀)에서 별도 'card' 이벤트로 추가
+        // 발생시킨다(같은 선수가 이미 한 장 있으면 기존 퇴장 로직이 알아서
+        // 두 번째 경고=퇴장으로 승격시킨다).
+        if (Math.random() < 0.1 * cardBias) {
+          const oppRatings = side === 'home' ? away : home;
+          const oppSide = side === 'home' ? 'away' : 'home';
+          const culpritC = pickWeighted(oppRatings.roster.filter((c) => c.slotLine !== 'GK'), () => 1);
+          if (culpritC) {
+            events.push({
+              minute,
+              type: 'card',
+              team: oppSide,
+              player: culpritC.player.name,
+              playerId: culpritC.player.id,
+              text: `${culpritC.player.name} 경고 — 약한 태클이었지만 심판 재량으로 옐로카드`,
+              via: null,
+              awardedTeam: side,
+            });
+          }
+        }
       } else if (roll < 0.82) {
         type = 'throwin';
         text = `볼이 터치라인을 벗어남 — 스로인`;
@@ -406,7 +430,27 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
         type = 'card';
         text = `${who} 경고 (옐로카드)`;
       }
-      events.push({ minute, type, team: side, player: who, playerId: whoId, text, via });
+      // 심판 성향(cardBias)을 기본 카드 밴드에도 반영한다 — 밴드 경계값을
+      // 직접 옮기면 옆 밴드(페널티 등)와 겹치니, 대신 확률적으로 카드 쪽
+      // 으로/에서 변환한다: 엄격한 심판은 애매한 상황(슈팅/스로인류)도 가끔
+      // 카드로 잡고, 관대한 심판은 원래 카드였을 상황을 가끔 봐준다.
+      if (cardBias > 1 && type !== 'card' && type !== 'foul' && via == null) {
+        if (Math.random() < (cardBias - 1) * 0.05) {
+          type = 'card';
+          text = `${who} 경고 (옐로카드)`;
+        }
+      } else if (type === 'card' && cardBias < 1 && Math.random() > cardBias) {
+        type = 'miss';
+        text = `${who}의 슈팅이 골문을 벗어남`;
+      }
+      // "누가 프리킥을 얻는 팀인지"는 이벤트 타입마다 의미가 다르다 —
+      // foul은 team이 이미 그 수혜팀(파울당한 쪽)이지만, card는 team이
+      // 카드를 받는(반칙을 저지른) 쪽이라 프리킥은 반대 팀 몫이다. 프론트가
+      // 그때그때 타입을 보고 뒤집어 계산하지 않도록 여기서 명시적으로
+      // 계산해 보낸다 — 나중에 타입 하나가 바뀌어도 이 필드만 보면 된다.
+      const opp = side === 'home' ? 'away' : 'home';
+      const awardedTeam = type === 'card' ? opp : side;
+      events.push({ minute, type, team: side, player: who, playerId: whoId, text, via, awardedTeam });
     });
   };
   addFlavor('home', home, away.GK, xgHome);
@@ -427,13 +471,20 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
 
     if (Math.random() < INJURY_CHANCE * frac) {
       const victim = outfield[Math.floor(Math.random() * outfield.length)].player;
+      // 부상 경중도: 경미(65%)는 잠깐 빠졌다 같은 자리로 복귀, 중상(35%)만
+      // 실제로 못 뛰게 되어 강제 교체(medical timeout)로 이어진다.
+      const severity = Math.random() < 0.65 ? 'minor' : 'major';
       events.push({
         minute: randMinute(),
         type: 'injury',
         team: side,
         player: victim.name,
         playerId: victim.id,
-        text: `🚑 ${victim.name}, 부상으로 그라운드에 쓰러집니다`,
+        severity,
+        text:
+          severity === 'minor'
+            ? `🚑 ${victim.name}, 충돌로 그라운드에 쓰러졌지만 곧 다시 일어섭니다`
+            : `🚑 ${victim.name}, 부상으로 그라운드에 쓰러집니다 — 교체가 불가피해 보입니다`,
       });
     }
 
@@ -482,9 +533,10 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
           redAdj[opp] *= 1 + 0.25 * rem;
         };
         // 스트레이트 레드: 심각한 반칙은 경고 없이 즉시 퇴장 (실제 레드의
-        // 절반 이상이 이 유형)
-        if (Math.random() < 0.08) {
-          sendOff(`🟥 ${e.player} 퇴장! (심각한 반칙)`);
+        // 절반 이상이 이 유형) — VAR 판독을 거쳐 확정되는 것으로 서사를
+        // 붙인다(프론트가 이 문구를 감지해 VAR 배너를 띄운다).
+        if (Math.random() < 0.08 * cardBias) {
+          sendOff(`🟥 ${e.player} 퇴장! (심각한 반칙 — VAR 판독 후 확정)`);
           return;
         }
         const names = [...booked[side].keys()];
@@ -520,7 +572,9 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     return d && minute >= d.minute ? d.id : null;
   };
 
-  const addGoals = (count, side, ratings) => {
+  // 실제 EPL 기준 전체 득점의 2~3% 정도가 자책골이다.
+  const OWN_GOAL_RATE = 0.025;
+  const addGoals = (count, side, ratings, oppSide, oppRatings) => {
     // corner share scales with the team's aerial strength (tallest-3 outfield
     // avg vs a ~186cm baseline, ±1%/cm) so tall/physical XIs actually convert
     // more corners, clamped to a realistic 5-16% band around the ~10% base —
@@ -533,6 +587,40 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
       const r = Math.random();
       const via = r < 0.12 ? 'penalty' : r < 0.18 ? 'freekick' : r < 0.18 + cornerShare ? 'corner' : null;
       const excludeId = excludeAt(side, minute);
+
+      // 자책골: 페널티는 대상에서 제외(키커가 직접 넣는 상황이라 자책골이
+      // 나올 수 없다). 득점은 side(수혜팀) 스코어보드에 그대로 붙지만,
+      // playerId는 일부러 비워서(스탯 집계는 store.bumpPlayerStat이
+      // playerId가 없으면 스킵) 상대 수비수 개인 득점 기록으로 잡히지
+      //않게 한다 — 실제 자책골도 득점자 개인 기록에는 안 들어간다.
+      // 상대 진영/스프라이트 매칭용으로 ownGoalPlayerId는 따로 둔다.
+      if (via !== 'penalty' && oppRatings && Math.random() < OWN_GOAL_RATE) {
+        const oppExcludeId = excludeAt(oppSide, minute);
+        const defenders = oppRatings.roster.filter(
+          (r2) => r2.slotLine === 'DEF' && r2.player.id !== oppExcludeId
+        );
+        const pool = defenders.length
+          ? defenders
+          : oppRatings.roster.filter((r2) => r2.slotLine !== 'GK' && r2.player.id !== oppExcludeId);
+        if (pool.length) {
+          const culprit = pool[Math.floor(Math.random() * pool.length)].player;
+          events.push({
+            minute,
+            type: 'goal',
+            team: side,
+            ownGoal: true,
+            player: culprit.name,
+            playerId: null,
+            ownGoalPlayerId: culprit.id,
+            ownGoalTeam: oppSide,
+            assist: null,
+            assistId: null,
+            via: null,
+          });
+          return;
+        }
+      }
+
       const scorer = scorerFor(ratings, excludeId, { aerial: via === 'corner' });
       // penalties are one-on-one — no assist; corners are always credited to
       // whoever delivered the ball in; open play/free kicks usually do (~75%)
@@ -554,8 +642,8 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
       });
     });
   };
-  addGoals(goalsHome, 'home', home);
-  addGoals(goalsAway, 'away', away);
+  addGoals(goalsHome, 'home', home, 'away', away);
+  addGoals(goalsAway, 'away', away, 'home', home);
 
   // 오프사이드(VAR 취소): 실제 스코어는 그대로 두고, 그 팀의 공격력(xG)에
   // 비례해 "취소된 득점"을 얹는다 — 이전엔 xG와 무관한 4% 고정 확률이라
@@ -600,10 +688,14 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     let text = e.text;
     if (e.type === 'goal') {
       const scorerTeam = e.team === 'home' ? homeName : awayName;
-      const suffix =
-        e.via === 'penalty' ? ' (페널티킥)' : e.via === 'freekick' ? ' (프리킥)' : e.via === 'corner' ? ' (코너킥)' : '';
-      const assistText = e.assist ? ` (어시스트: ${e.assist})` : '';
-      text = `⚽ ${e.player} 골!${suffix}${assistText} (${scorerTeam})`;
+      if (e.ownGoal) {
+        text = `⚽ 자책골! ${e.player} — 본인 골문에 공을 넣고 맙니다 (${scorerTeam} 득점)`;
+      } else {
+        const suffix =
+          e.via === 'penalty' ? ' (페널티킥)' : e.via === 'freekick' ? ' (프리킥)' : e.via === 'corner' ? ' (코너킥)' : '';
+        const assistText = e.assist ? ` (어시스트: ${e.assist})` : '';
+        text = `⚽ ${e.player} 골!${suffix}${assistText} (${scorerTeam})`;
+      }
     }
     return {
       minute: e.minute,
@@ -615,6 +707,11 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
       assistId: e.assistId || null,
       via: e.via || null,
       red: e.red || null, // 경고 누적 퇴장
+      severity: e.severity || null,
+      ownGoal: e.ownGoal || null,
+      ownGoalPlayerId: e.ownGoalPlayerId || null,
+      ownGoalTeam: e.ownGoalTeam || null,
+      awardedTeam: e.awardedTeam || null,
       text,
       score: { home: sh, away: sa },
     };

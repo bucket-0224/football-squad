@@ -19,11 +19,17 @@ export interface MatchEvent {
   assistId?: string | null;
   via?: string | null;
   red?: boolean | null;
+  severity?: 'minor' | 'major' | null;
+  ownGoal?: boolean | null;
+  ownGoalPlayerId?: string | null;
+  ownGoalTeam?: 'home' | 'away' | null;
+  awardedTeam?: 'home' | 'away' | null;
   text: string;
   score?: { home: number; away: number };
 }
 
 interface SideCard {
+  id?: string;
   name?: string;
   attrs?: {
     pace?: number;
@@ -37,6 +43,7 @@ interface SideCard {
 
 interface SideStart {
   name?: string;
+  logo?: string | null;
   ratings: { OVR: number; formation: string };
   tactic?: string;
   tacticName?: string;
@@ -62,6 +69,7 @@ export interface ResultMsg {
   xg: { home: number; away: number };
   possession: { home: number; away: number };
   reward?: { coins: number; points: number };
+  finalMinute?: number;
 }
 
 export interface LiveMatchCallbacks {
@@ -80,6 +88,7 @@ interface Sprite {
   gk: boolean;
   off: boolean;
   isHome: boolean;
+  id: string | null;
   label: string;
   paceMul: number;
   dribMul: number;
@@ -312,6 +321,7 @@ export class LiveMatchEngine {
           gk: i === 0,
           off: false,
           isHome,
+          id: (card && card.id) || null,
           label: vizShortName(card && card.name),
           paceMul: vizAttrMul(a.pace),
           dribMul: vizAttrMul(a.dribbling),
@@ -435,12 +445,21 @@ export class LiveMatchEngine {
       p.baseY = base.y;
       const card = lineup && lineup[i];
       const a = (card && card.attrs) || {};
+      // id를 안 바꾸면 라이브 교체 이후 이 슬롯을 가리키는 새 이벤트가
+      // findSprite()의 id 매칭에서 실패해(옛 선수 id로 남아있으니) 조용히
+      // 엉뚱한 선수를 찾거나 아무도 못 찾는다 — 등번호/이름은 즉시 바뀌어
+      // 보였는데 실제로는 옛 선수를 계속 추적하던 원인.
+      p.id = (card && card.id) || null;
       p.label = vizShortName(card && card.name);
       p.paceMul = vizAttrMul(a.pace);
       p.dribMul = vizAttrMul(a.dribbling);
       p.passMul = vizAttrMul(a.passing);
       p.defMul = vizAttrMul(a.defending);
       p.shotMul = vizAttrMul(a.shooting);
+      // 이 슬롯이 부상/태업으로 off 처리돼 있었더라도, 라이브 교체로 새
+      // 선수가 들어왔으면 당연히 뛸 수 있어야 한다 — 안 풀어주면 방금
+      // 들어온 교체 선수가 계속 필드 밖 취급을 받는다.
+      p.off = false;
     });
     this.computeDepthOffsets();
   }
@@ -519,6 +538,22 @@ export class LiveMatchEngine {
     return this.players.filter((p) => p.isHome === (side === 'home'));
   }
 
+  // 이벤트가 가리키는 실제 선수의 스프라이트를 찾는다 — playerId가 있으면
+  // id로 정확히 매칭하고(같은 성을 가진 동료가 있어도 안 헷갈림), 없는
+  // 과거 데이터/엣지 케이스에서만 이름 문자열 매칭으로 폴백한다. 예전엔
+  // 항상 이름 매칭만 썼는데, 매칭이 실패하거나 동명이인일 때 득점 배너/
+  // 스탯은 맞는 선수를 가리키면서 정작 필드 위에서 골을 넣는 스프라이트는
+  // 엉뚱한 선수가 되는 원인이었다.
+  private findSprite(side: Side, playerId: string | null | undefined, playerName: string | undefined): Sprite | null {
+    const pool = this.team(side).filter((pl) => !pl.off && !pl.gk);
+    if (playerId) {
+      const byId = pool.find((pl) => pl.id === playerId);
+      if (byId) return byId;
+    }
+    const short = vizShortName(playerName);
+    return pool.find((pl) => pl.label === short) || null;
+  }
+
   private dir(side: Side): number {
     return side === 'home' ? 1 : -1;
   }
@@ -586,8 +621,11 @@ export class LiveMatchEngine {
     const gy = VIZ.H / 2;
     const team = this.team(side);
     const forwards = team.filter((p) => !p.gk && !p.off && p.num >= 9);
+    // 골 이벤트라면 백엔드가 이미 정한 득점자를 빌드업의 최종 수신자로
+    // 우선한다 — "마지막으로 터치한 선수가 골을 넣는다"가 실제로 성립하게.
+    const preferred = atk.e.type === 'goal' ? this.findSprite(side, atk.e.playerId, atk.e.player) : null;
     const runner1 =
-      forwards[Math.floor(Math.random() * forwards.length)] || team.filter((p) => !p.gk && !p.off).pop();
+      preferred || forwards[Math.floor(Math.random() * forwards.length)] || team.filter((p) => !p.gk && !p.off).pop();
     atk.phase = 'finish';
     if (Math.random() < 0.55) {
       const target = {
@@ -616,7 +654,9 @@ export class LiveMatchEngine {
       this.throughBall(corner1, wide, {
         onDone: () => {
           this.carrier = wide;
-          const late = forwards.find((p) => p !== wide) || (runner1 as Sprite);
+          // 컷백 이후 실제로 마무리하는 선수도 마찬가지로 진짜 득점자를
+          // 우선한다(측면으로 벌려준 wide는 그냥 배달자일 뿐).
+          const late = preferred || forwards.find((p) => p !== wide) || (runner1 as Sprite);
           const cut = { x: gx - dir * (52 + Math.random() * 40), y: gy + (Math.random() * 56 - 28) };
           this.say(`${this.name(wide)}의 컷백!`);
           this.throughBall(cut, late, {
@@ -811,7 +851,10 @@ export class LiveMatchEngine {
     const feed = () => this.cb.onFeedItem(e.minute + "'", e.text, e.type);
 
     if (e.type === 'card' || e.type === 'foul') {
-      const fkSide: Side = e.type === 'foul' ? e.team : e.team === 'home' ? 'away' : 'home';
+      // 백엔드가 명시적으로 계산해 보내는 값을 우선 쓴다 — foul은 team이
+      // 이미 프리킥을 얻는 팀이고 card는 반대 팀이라, 타입별로 뒤집어
+      // 계산하던 예전 방식은 둘 중 하나만 바뀌어도 조용히 어긋날 수 있었다.
+      const fkSide: Side = e.awardedTeam ?? (e.type === 'foul' ? e.team : e.team === 'home' ? 'away' : 'home');
       if (this.possession !== fkSide) {
         this.takeover(fkSide, this.nearest(fkSide, b.x, b.y));
         this.passTimer = 1.2;
@@ -902,18 +945,27 @@ export class LiveMatchEngine {
     }
 
     if (e.type === 'injury' || e.type === 'strop') {
-      // reuses the exact ".off" unavailability mechanism a red card uses:
-      // matched by short name label (sprites don't carry a playerId), the
-      // 14 existing "!p.off" filters elsewhere then keep them out of play.
+      // reuses the exact ".off" unavailability mechanism a red card uses —
+      // the 14 existing "!p.off" filters elsewhere then keep them out of
+      // play. id로 매칭해서 동명이인/매칭 실패로 아무도 안 빠지는(=필드에
+      // "남아있는") 상황을 없앤다.
       feed();
       const short = vizShortName(e.player);
-      const dot = this.team(e.team).find((pl) => !pl.off && !pl.gk && pl.label === short);
+      const dot = this.findSprite(e.team, e.playerId, e.player);
+      const minor = e.type === 'injury' && e.severity === 'minor';
       if (dot) {
         dot.off = true;
         if (this.carrier === dot) this.carrier = null;
         if (this.runner === dot) this.runner = null;
+        // 경미한 부상: 잠시 빠졌다가(치료) 같은 자리로 복귀 — 중상(또는
+        // 태업)만 실제 교체가 나올 때까지 계속 빠진 상태를 유지한다.
+        if (minor) {
+          window.setTimeout(() => {
+            dot.off = false;
+          }, 3000);
+        }
       }
-      const label = e.type === 'injury' ? '부상' : '태업';
+      const label = e.type === 'injury' ? (minor ? '경미한 부상' : '부상') : '태업';
       this.banner(`🚑 ${label} — ${short}`, e.type === 'injury' ? 'red' : 'yellow', 2600);
       return;
     }
@@ -938,7 +990,10 @@ export class LiveMatchEngine {
     // dribbling — a system with no notion of "who this event is about" —
     // while the feed/banner name a specific (usually different) player.
     if (e.player) {
-      const named = this.team(e.team).find((pl) => !pl.off && !pl.gk && pl.label === vizShortName(e.player));
+      // 자책골은 e.team(득점 혜택팀)이 아니라 상대팀 수비수가 주인공이다.
+      const named = e.ownGoal
+        ? this.findSprite(e.ownGoalTeam === 'home' ? 'home' : 'away', e.ownGoalPlayerId, e.player)
+        : this.findSprite(e.team, e.playerId, e.player);
       if (named) this.carrier = named;
     }
   }
@@ -961,7 +1016,11 @@ export class LiveMatchEngine {
     // Without this, a penalty/free kick/corner ceremony would show whoever
     // happened to be dribbling standing over the ball while the feed/toast
     // announce a completely different player's name.
-    const namedShooter = this.team(side).find((pl) => !pl.off && !pl.gk && pl.label === vizShortName(e.player));
+    // 자책골은 e.team(득점 혜택팀) 소속이 아니라 상대(실점팀) 수비수가
+    // "슈터" 역할이다 — 자기 골문에 넣는 그 수비수를 찾아야 한다.
+    const namedShooter = e.ownGoal
+      ? this.findSprite(defSide, e.ownGoalPlayerId, e.player)
+      : this.findSprite(side, e.playerId, e.player);
     const shooter = namedShooter || this.carrier || this.team(side)[9] || this.team(side)[8];
     const shotSpd = Math.round(600 * ((shooter && shooter.shotMul) || 1));
     this.runner = null;
@@ -1015,11 +1074,13 @@ export class LiveMatchEngine {
         this.push(gx + dir * 10, gy + (Math.random() * 52 - 26), shotSpd, {
           wait: 0.18,
           onDone: () => {
-            this.flash = { text: '⚽ GOAL!', until: this.now + 1500 };
+            this.flash = { text: e.ownGoal ? '⚽ OWN GOAL' : '⚽ GOAL!', until: this.now + 1500 };
             this.carrier = null;
             feed();
             this.cb.onBanner(
-              `⚽ ${vizShortName(e.player)} 골!${e.assist ? ` (도움: ${vizShortName(e.assist)})` : ''}`,
+              e.ownGoal
+                ? `⚽ 자책골! ${vizShortName(e.player)}`
+                : `⚽ ${vizShortName(e.player)} 골!${e.assist ? ` (도움: ${vizShortName(e.assist)})` : ''}`,
               'goal',
               3000
             );
@@ -1315,18 +1376,21 @@ export class LiveMatchEngine {
         this.comCd = 0;
         if (d.e.red) {
           const short = vizShortName(d.e.player);
-          const dot =
-            this.team(d.e.team).find((pl) => !pl.off && !pl.gk && pl.label === short) ||
-            (d.chaser && !d.chaser.gk ? d.chaser : null);
+          const dot = this.findSprite(d.e.team, d.e.playerId, d.e.player) || (d.chaser && !d.chaser.gk ? d.chaser : null);
           if (dot) dot.off = true;
           this.say(`🟥 ${this.name(dot)} 퇴장! 팀은 10명으로 싸웁니다`);
+          // 심각한 반칙으로 경고 없이 바로 나온 스트레이트 레드는 VAR
+          // 판독을 거친 것으로 서사를 붙인다(백엔드 simulate.js가 이미
+          // "straight red" 텍스트를 넣어 보내면 그걸 그대로 쓴다).
+          const varReview = /심각한 반칙|VAR/.test(d.e.text || '');
+          if (varReview) this.banner('📺 VAR 판독 중...', 'yellow', 1400);
           this.banner(`🟥 레드카드 — ${short}`, 'red', 3000);
         } else if (d.e.type === 'card') {
           // the small commentary line and the banner named different players
           // before — chaser (nearest defender) vs d.e.player (actually
-          // booked) — match by name here too so both agree.
+          // booked) — match by id here too so both agree.
           const cardedShort = vizShortName(d.e.player);
-          const booked = this.team(d.e.team).find((pl) => !pl.off && !pl.gk && pl.label === cardedShort) || d.chaser;
+          const booked = this.findSprite(d.e.team, d.e.playerId, d.e.player) || d.chaser;
           this.say(`${this.name(booked ?? null)}의 거친 태클 — 휘슬이 울립니다`);
           this.banner(`🟨 옐로카드 — ${cardedShort}`, 'yellow', 2200);
         } else {
@@ -1397,7 +1461,13 @@ export class LiveMatchEngine {
         this.beginEvent(this.queue.shift() as MatchEvent);
       } else {
         this.runner = null;
-        if (this.pendingResult && (!this.flash || this.now > this.flash.until)) {
+        // 하프타임 배너와 같은 이유의 같은 버그: 큐가 비었다고 바로 종료
+        // 팝업을 띄우면, 후반 막판에 이벤트가 적어 큐가 먼저 말라버릴 때
+        // 화면 시계(dispMin)가 아직 90+추가시간에 못 미친 채로 경기 종료
+        // 팝업이 뜬다 — finalMinute(서버가 계산한 90+추가시간)까지 시계가
+        // 다 채워진 뒤에만 넘긴다.
+        const finalMinute = this.pendingResult?.finalMinute ?? 90;
+        if (this.pendingResult && (!this.flash || this.now > this.flash.until) && this.dispMin >= finalMinute) {
           const res = this.pendingResult;
           this.pendingResult = null;
           this.deliverResult(res);

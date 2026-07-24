@@ -897,9 +897,43 @@ input:focus, select:focus { border-color: var(--blue); }
 .fit-bad { color: var(--red); }
 
 /* ===== transfer negotiation / complaint modal ===== */
-#nego-overlay, #complaint-overlay, #player-detail-overlay, #transfer-request-overlay, #account-settings-overlay, #news-detail-overlay, #match-detail-overlay {
+#nego-overlay, #complaint-overlay, #player-detail-overlay, #transfer-request-overlay, #account-settings-overlay, #news-detail-overlay, #match-detail-overlay, #ref-preview-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px;
+}
+.ref-preview-modal {
+  max-width: 420px; align-items: center; text-align: center;
+}
+.ref-preview-teams {
+  display: flex; align-items: center; justify-content: center; gap: 18px; width: 100%;
+}
+.ref-preview-team {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; min-width: 0;
+}
+.ref-preview-logo {
+  width: 64px; height: 64px; object-fit: contain; border-radius: 12px;
+}
+.ref-preview-logo-fallback {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); font-size: 28px;
+}
+.ref-preview-team-name {
+  font-weight: 800; font-size: 14px; overflow-wrap: break-word;
+}
+.ref-preview-vs {
+  font-weight: 800; color: var(--dim); flex-shrink: 0;
+}
+.ref-preview-referee {
+  width: 100%; border-top: 1px solid var(--border); padding-top: 12px; display: flex; flex-direction: column; gap: 4px;
+}
+.ref-preview-referee-name {
+  font-weight: 700;
+}
+.ref-preview-referee-trait {
+  margin: 0;
+}
+.ref-preview-start {
+  width: 100%;
 }
 .nego-modal {
   background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
