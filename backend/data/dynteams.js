@@ -80,11 +80,21 @@ const LEAGUE_TEAMS = {
     'Gangwon FC', 'Gwangju FC', 'Daejeon Hana Citizen', 'Jeju SK',
     'Suwon FC', 'FC Anyang', 'Gimcheon Sangmu', 'Bucheon FC 1995',
   ],
+  // TSDB's own team names carry the hyphen ("Al-Hilal" etc.) — every one of
+  // these individually verified to resolve via searchteams.php. "Al-Shabab"
+  // (also a well-known Saudi club) is left out: it doesn't resolve on TSDB
+  // under any name variant tried, unlike the Nottingham Forest case there's
+  // no unambiguous id to hardcode into META_OVERRIDES for it.
+  SaudiPL: [
+    'Al-Hilal', 'Al-Nassr', 'Al-Ittihad', 'Al-Ahli', 'Al-Ettifaq', 'Al-Fateh',
+    'Al-Fayha', 'Al-Hazem', 'Al-Khaleej', 'Al-Kholood', 'Al-Najma Unaizah',
+    'Al-Taawoun', 'Al-Riyadh', 'Al-Okhdood', 'Al-Qadsiah', 'Al-Orobah', 'Al-Raed',
+  ],
 };
 
 const LEAGUE_BASE_OVR = {
   EPL: 77, LaLiga: 76, Bundesliga: 75, SerieA: 75, Ligue1: 74,
-  MLS: 69, BrasilA: 71, KLeague: 67,
+  MLS: 69, BrasilA: 71, KLeague: 67, SaudiPL: 72,
 };
 
 // TSDB ids + full names, used to harvest badges league-by-league.
@@ -97,6 +107,36 @@ const LEAGUE_META = {
   MLS: { id: 4346, name: 'American Major League Soccer' },
   BrasilA: { id: 4351, name: 'Brazilian Serie A' },
   KLeague: { id: 4689, name: 'South Korean K League 1' },
+  SaudiPL: { id: 4536, name: 'Saudi-Arabian Pro League' },
+};
+
+// National teams: not members of any of the domestic leagues above, so they
+// get their own (non-league-gated) registration path — see ensureNationalTeam.
+// TSDB groups them under "FIFA World Cup" / "World Cup Qualifying <region>"
+// depending on recent qualification, but a plain searchteams.php?t=<country>
+// resolves any of them by name regardless of which grouping they landed in.
+const NATIONAL_TEAMS = [
+  'Brazil', 'Argentina', 'France', 'Germany', 'Spain', 'Italy', 'England',
+  'Portugal', 'Netherlands', 'Belgium', 'Croatia', 'Uruguay', 'Colombia',
+  'Mexico', 'USA', 'Japan', 'South Korea', 'Morocco', 'Senegal', 'Nigeria',
+  'Saudi Arabia', 'Denmark', 'Switzerland', 'Poland',
+];
+// A handful of historically elite national sides rate a bit higher than the
+// rest of the curated list — same "base + small roll" shape as club leagues.
+const NATIONAL_TOP_TIER = new Set([
+  'Brazil', 'Argentina', 'France', 'Germany', 'Spain', 'Italy', 'England',
+  'Portugal', 'Netherlands', 'Belgium', 'Croatia', 'Uruguay',
+]);
+const NATIONAL_BASE_OVR = (name) => (NATIONAL_TOP_TIER.has(name) ? 80 : 73);
+// ISO alpha-2 for flagEmoji() — every player on a national roster shares
+// this one code, so a small direct map is simpler than reusing NATION_ISO
+// (keyed for TSDB nationality strings, different casing/naming needs).
+const NATIONAL_ISO = {
+  Brazil: 'BR', Argentina: 'AR', France: 'FR', Germany: 'DE', Spain: 'ES',
+  Italy: 'IT', England: 'EN', Portugal: 'PT', Netherlands: 'NL', Belgium: 'BE',
+  Croatia: 'HR', Uruguay: 'UY', Colombia: 'CO', Mexico: 'MX', USA: 'US',
+  Japan: 'JP', 'South Korea': 'KR', Morocco: 'MA', Senegal: 'SN', Nigeria: 'NG',
+  'Saudi Arabia': 'SA', Denmark: 'DK', Switzerland: 'CH', Poland: 'PL',
 };
 
 function norm(s) {
@@ -132,6 +172,7 @@ function db() {
   const d = store.get();
   if (!d.dynRosters) d.dynRosters = {};
   if (!d.dynMeta) d.dynMeta = {}; // normName -> { id, badge } from searchteams
+  if (!d.dynNations) d.dynNations = {}; // national-team rosters, separate from club dynRosters
   return d;
 }
 
@@ -156,6 +197,29 @@ const META_OVERRIDES = {
     id: '133720',
     badge: 'https://r2.thesportsdb.com/images/media/team/badge/sar2y41781740886.png',
   },
+  // TSDB's individual searchteams.php is inconsistent with the hyphenated
+  // names its own bulk league search returns (search_all_teams.php works
+  // fine for "Al-Hilal", but searchteams.php?t=Al-Hilal returns nothing —
+  // only "Al Hilal SFC"/"Al Nassr" without the hyphen do) — every Saudi PL
+  // club's id verified individually rather than relying on either search
+  // path alone.
+  alhilal: { id: '136013', badge: 'https://r2.thesportsdb.com/images/media/team/badge/w0b80d1661656916.png' },
+  alnassr: { id: '136022', badge: 'https://r2.thesportsdb.com/images/media/team/badge/84yvqi1748524565.png' },
+  alittihad: { id: '136018', badge: 'https://r2.thesportsdb.com/images/media/team/badge/8n1t1j1755192418.png' },
+  alahli: { id: '137721', badge: 'https://r2.thesportsdb.com/images/media/team/badge/1bbtgb1755192301.png' },
+  alettifaq: { id: '136017', badge: 'https://r2.thesportsdb.com/images/media/team/badge/m272h51694761970.png' },
+  alfateh: { id: '136011', badge: 'https://r2.thesportsdb.com/images/media/team/badge/a5cjf41662659789.png' },
+  alfayha: { id: '136014', badge: 'https://r2.thesportsdb.com/images/media/team/badge/jl3spp1677530565.png' },
+  alhazem: { id: '136200', badge: 'https://r2.thesportsdb.com/images/media/team/badge/3uy27p1635871755.png' },
+  alkhaleej: { id: '139080', badge: 'https://r2.thesportsdb.com/images/media/team/badge/mvf6ga1755192630.png' },
+  alkholood: { id: '149112', badge: 'https://r2.thesportsdb.com/images/media/team/badge/vv44v01755192851.png' },
+  alnajmaunaizah: { id: '150638', badge: 'https://r2.thesportsdb.com/images/media/team/badge/o65fn01737686968.png' },
+  altaawoun: { id: '136012', badge: 'https://r2.thesportsdb.com/images/media/team/badge/rlsmp91646835052.png' },
+  alriyadh: { id: '147445', badge: 'https://r2.thesportsdb.com/images/media/team/badge/i4o0zy1755193321.png' },
+  alokhdood: { id: '147444', badge: 'https://r2.thesportsdb.com/images/media/team/badge/ub1l7h1755193155.png' },
+  alqadsiah: { id: '136015', badge: 'https://r2.thesportsdb.com/images/media/team/badge/ok63wb1719134839.png' },
+  alorobah: { id: '149111', badge: 'https://r2.thesportsdb.com/images/media/team/badge/y1rnl91721742609.png' },
+  alraed: { id: '136016', badge: 'https://r2.thesportsdb.com/images/media/team/badge/9vkdcc1677530862.png' },
 };
 
 // Look a team up on TSDB and cache its id + badge.
@@ -379,6 +443,52 @@ async function fetchWikiSquad(teamName) {
   return null;
 }
 
+// National-team squad lists use a different Wikipedia template than club
+// squads ({{nat fs g player|no=..|pos=..|name=[[Player]]|...}} instead of
+// {{fs player|name=..|pos=..|nat=..}}) — separate parser, same output shape
+// minus per-row nationality (implicit: every row belongs to the team itself).
+function parseNationalSquadWikitext(wt) {
+  const idx = wt.search(/current squad/i);
+  const scope = idx >= 0 ? wt.slice(idx) : wt;
+  const rows = [...scope.matchAll(/\{\{nat fs g player\s*\|([^}]*)\}\}/gi)];
+  const out = [];
+  rows.forEach((m) => {
+    const body = m[1].replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, '$1');
+    const f = {};
+    body.split('|').forEach((kv) => {
+      const i = kv.indexOf('=');
+      if (i > 0) f[kv.slice(0, i).trim().toLowerCase()] = kv.slice(i + 1).trim();
+    });
+    let name = String(f.name || '').replace(/[[\]]/g, '');
+    name = name.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!name || name.length > 40) return;
+    const posRaw = String(f.pos || '').toUpperCase();
+    const line = /GK/.test(posRaw) ? 'GK' : /DF/.test(posRaw) ? 'DF' : /FW/.test(posRaw) ? 'FW' : 'MF';
+    out.push({ name, line });
+  });
+  return out;
+}
+
+// Resolve a national team's Wikipedia article and parse its current squad.
+// "{Country} national football team" is the standard article naming for
+// men's national sides; a couple of countries (Korea Republic vs "South
+// Korea", etc.) resolve fine via redirects:1 without special-casing.
+async function fetchWikiNationalSquad(teamName) {
+  const consider = (j) => {
+    if (!j || !j.parse || !j.parse.wikitext) return null;
+    const rows = parseNationalSquadWikitext(j.parse.wikitext['*']);
+    return rows.length >= 15 ? rows : null;
+  };
+  return consider(
+    await wikiApi({
+      action: 'parse',
+      page: teamName + ' national football team',
+      prop: 'wikitext',
+      redirects: 1,
+    })
+  );
+}
+
 const YOUTH_SURNAMES = [
   'Silva', 'Kim', 'Costa', 'Weber', 'Rossi', 'Dubois', 'Sato', 'Mensah',
   'Diaz', 'Kovac', 'Ivanov', 'Berg', 'Fischer', 'Moreau', 'Santos', 'Novak',
@@ -452,12 +562,14 @@ async function fetchTsdbPlayers(teamId) {
 
 // ---------------------------------------------------------------------------
 // Dynamic player images: remote cutouts are downloaded once into
-// frontend/img/players/dyn/ and cropped to the same upper-body framing the
-// curated players use (scripts/crop-upper-body.py), so every card shares the
-// same proportions. Failures just keep the remote URL (client CSS covers it).
+// frontend/public/img/players/dyn/ and cropped to the same upper-body
+// framing the curated players use (scripts/crop-upper-body.py), so every
+// card shares the same proportions. Failures just keep the remote URL
+// (client CSS covers it). Vite serves public/ at the URL root with the
+// public/ segment stripped — same convention as players.js's IMG_DIR.
 // ---------------------------------------------------------------------------
 
-const DYN_IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'img', 'players', 'dyn');
+const DYN_IMG_DIR = path.join(__dirname, '..', '..', 'frontend', 'public', 'img', 'players', 'dyn');
 const CROP_SCRIPT = path.join(__dirname, '..', '..', 'scripts', 'crop-upper-body.py');
 const IMG_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0';
 
@@ -688,6 +800,102 @@ async function ensureRoster(teamName) {
   return def.name;
 }
 
+// Build a national-team roster def: Wikipedia's current-squad list only (no
+// TSDB per-player lookup exists for national sides the way lookup_all_players
+// works for clubs), positions spread round-robin across each broad line —
+// same coarse-placement shape buildRosterDef already uses when a club roster
+// comes back Wikipedia-only. Per-player photos still get found afterward via
+// cacheDynImages's generic per-name search, unrelated to this TSDB gap.
+async function buildNationalRosterDef(teamName, meta) {
+  const base = NATIONAL_BASE_OVR(teamName);
+  const rollOvr = () => Math.max(60, Math.min(92, Math.round(base + (Math.random() * 8 - 4))));
+  const wiki = await fetchWikiNationalSquad(teamName);
+  if (!wiki || !wiki.length) return null;
+  const CYCLES = { DF: ['CB', 'CB', 'RB', 'LB'], MF: ['CM', 'CM', 'CDM', 'CAM'], FW: ['ST', 'RW', 'LW'] };
+  const cycleN = { DF: 0, MF: 0, FW: 0 };
+  const nation = NATIONAL_ISO[teamName] || null;
+  const list = wiki.slice(0, 26).map((w) => ({
+    name: w.name,
+    pos: w.line === 'GK' ? 'GK' : CYCLES[w.line][cycleN[w.line]++ % CYCLES[w.line].length],
+    ovr: rollOvr(),
+    nation,
+    img: null,
+  }));
+  return {
+    teamId: 'nat' + norm(teamName),
+    name: teamName,
+    type: 'national',
+    logo: meta.badge || null,
+    v: ROSTER_V,
+    players: arrangeRoster(list, base).slice(0, 26),
+  };
+}
+
+// Fetch (or restore) a national team's roster and register it as a playable
+// team — mirrors ensureRoster but bypasses the LEAGUE_OF membership check
+// (national sides aren't in any domestic league) and stores under a
+// separate dynNations cache key so a country name can never collide with a
+// same-normalized club name in dynRosters.
+async function ensureNationalTeam(teamName) {
+  const canon = NATIONAL_TEAMS.find((n) => norm(n) === norm(teamName));
+  if (!canon) throw new Error('not a selectable national team: ' + teamName);
+  const key = norm(canon);
+  const d = db();
+  let def = d.dynNations[key];
+  if (!def || def.v !== ROSTER_V) {
+    try {
+      const meta = await fetchMeta(canon);
+      if (!meta) throw new Error('national team lookup failed: ' + canon);
+      const built = await buildNationalRosterDef(canon, meta);
+      if (!built) throw new Error('national squad fetch failed: ' + canon);
+      def = built;
+      d.dynNations[key] = def;
+      store.save();
+      cacheDynImages(def).catch((err) =>
+        console.error('[dynteams] national image cache failed:', canon, err.message)
+      );
+    } catch (err) {
+      if (!def) throw err;
+      console.error('[dynteams] national roster refresh failed, keeping stale:', canon, err.message);
+    }
+  }
+  players.registerDynamicTeam({ ...def, replace: true });
+  return def.name;
+}
+
+// Eager boot pass: registers every Saudi Pro League club + curated national
+// team's roster (and kicks off their image search in the background) without
+// waiting for a user to pick one as a starting club — every other dynamic
+// league only fetches lazily on first selection, but the ask here was
+// specifically "have their players show up in the market", which the lazy
+// path alone can't satisfy for teams nobody has chosen yet. Skips anything
+// already cached from a prior run. Heavily paced to stay well under TSDB's
+// free-tier rate limit alongside the badge/roster-refresh passes already
+// running at boot.
+async function warmAllRosters() {
+  const d = db();
+  for (const name of LEAGUE_TEAMS.SaudiPL) {
+    if (d.dynRosters[norm(name)]) continue;
+    try {
+      await ensureRoster(name);
+      console.log('[dynteams] eager-registered club roster:', name);
+    } catch (err) {
+      console.error('[dynteams] eager club roster failed:', name, err.message);
+    }
+    await sleep(2000);
+  }
+  for (const name of NATIONAL_TEAMS) {
+    if (d.dynNations[norm(name)]) continue;
+    try {
+      await ensureNationalTeam(name);
+      console.log('[dynteams] eager-registered national roster:', name);
+    } catch (err) {
+      console.error('[dynteams] eager national roster failed:', name, err.message);
+    }
+    await sleep(2000);
+  }
+}
+
 // Boot-time pass: re-fetch every cached roster from before ROSTER_V and top
 // up the rosters of users based at those clubs with the newly added players.
 async function refreshRosters() {
@@ -797,6 +1005,13 @@ function restore() {
       console.error('[dynteams] restore failed for', def.name, err.message);
     }
   });
+  Object.values(d.dynNations).forEach((def) => {
+    try {
+      players.registerDynamicTeam(def);
+    } catch (err) {
+      console.error('[dynteams] national restore failed for', def.name, err.message);
+    }
+  });
   Object.values(d.dynPlayers || {}).forEach((def) => {
     try {
       players.registerSoloPlayer(def);
@@ -809,6 +1024,8 @@ function restore() {
 module.exports = {
   listSelectable,
   ensureRoster,
+  ensureNationalTeam,
+  warmAllRosters,
   restore,
   refreshRosters,
   warmDynImages,

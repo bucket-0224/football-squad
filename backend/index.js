@@ -25,6 +25,7 @@ dynteams.restore();
 dynteams.warmBadges();
 dynteams
   .refreshRosters()
+  .then(() => dynteams.warmAllRosters()) // Saudi PL clubs + curated national teams, so their players are in the market even if no user has picked them as a starting club
   .then(() => dynteams.warmDynImages()) // then hunt down missing player images
   .catch((err) => console.error('[dynteams] refresh pass failed:', err));
 

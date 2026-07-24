@@ -747,7 +747,7 @@ function registerDynamicTeam(def) {
   });
   TEAMS[def.name] = {
     name: def.name,
-    type: 'club',
+    type: def.type || (existing && existing.type) || 'club',
     league: def.league || (existing && existing.league) || null,
     color: def.color || (existing && existing.color) || '#3b82f6',
     logo: def.logo || (existing && existing.logo) || null,
