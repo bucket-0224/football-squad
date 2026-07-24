@@ -477,12 +477,29 @@ input:focus, select:focus { border-color: var(--blue); }
   0% { transform: translate(0, 0) scale(1); opacity: 1; }
   100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; }
 }
-.cere-items { display: flex; align-items: center; gap: 26px; font-size: 46px; z-index: 1; }
-.cere-item { opacity: 0; transform: scale(.3); transition: opacity .35s, transform .35s; }
+/* 국가 -> 포지션 -> 팀 로고 순으로 한 번에 하나씩만 보여준다 — 세 아이템
+   모두 같은 자리에 겹쳐 놓고(position:absolute) opacity만 토글해, 서로
+   다른 크기라도 자리가 튀지 않게 한다. */
+.cere-items { position: relative; width: 110px; height: 90px; z-index: 1; }
+.cere-item {
+  position: absolute; inset: 0; margin: auto;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 46px; opacity: 0; transform: scale(.3);
+  transition: opacity .35s, transform .35s;
+}
 .cere-item.on { opacity: 1; transform: scale(1); }
-#cere-pos { font-weight: 900; color: var(--gold); }
-#cere-club { width: 56px; height: 56px; object-fit: contain; }
+.cere-pos { font-weight: 900; color: var(--gold); font-size: 32px; }
+/* 이전에는 #cere-pos/#cere-club id 셀렉터였지만 실제 마크업엔 그 id가 없어
+   팀 로고 크기 제한이 전혀 적용되지 않고 있었다 — 모바일에서 로고가 원본
+   크기 그대로 커 보이던 원인. 클래스로 바꿔 실제로 먹히게 한다. */
+.cere-club { width: 56px; height: 56px; object-fit: contain; }
 .cere-label { margin-top: 8px; font-size: 13px; z-index: 1; }
+@media (max-width: 480px) {
+  .cere-items { width: 84px; height: 72px; }
+  .cere-item { font-size: 36px; }
+  .cere-pos { font-size: 24px; }
+  .cere-club { width: 40px; height: 40px; }
+}
 
 /* 작전 타임 (live pause & substitutions) */
 .pause-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -752,8 +769,16 @@ input:focus, select:focus { border-color: var(--blue); }
 .pack-special { background: linear-gradient(160deg, #3b2262, #180b33); border-color: #7b4fc4; box-shadow: 0 0 14px rgba(140, 90, 220, .35); }
 .pack-icon { background: linear-gradient(160deg, #5a4310, #2b2007); border-color: var(--gold); box-shadow: 0 0 16px rgba(227, 179, 65, .45); }
 
+/* 팝업(오버레이)으로 띄운다 — 이전엔 팩 선반 아래에 그냥 이어 붙는 인라인
+   영역이라 스크롤해야 보일 때가 있었다 */
+#pack-reveal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .75);
+  display: flex; align-items: center; justify-content: center; z-index: 80; padding: 16px;
+}
 #pack-reveal {
-  margin-top: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 28px 24px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto;
 }
 #pack-card-wrap { perspective: 900px; width: 170px; }
 #pack-card-wrap .fut-card { animation: cardFlipIn .8s cubic-bezier(.2,.8,.3,1); }

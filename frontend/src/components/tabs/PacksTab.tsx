@@ -97,18 +97,30 @@ function PackRevealModal({
   );
   const showCeremony = best.player.ovr >= 80;
   const [ceremonyDone, setCeremonyDone] = useState(!showCeremony);
+  // 국가 -> (사라짐) -> 포지션 -> (사라짐) -> 팀 로고(없으면 스킵) -> (사라짐)
+  // 순서로 한 번에 하나씩만 보여준다 — activeStage가 null이 되는 순간이 곧
+  // "사라짐" 구간이고, 세 아이템 모두 항상 마운트된 채 opacity만 토글되므로
+  // (조건부 렌더가 아님) 사라지는 트랜지션이 실제로 재생된다.
   const [stage, setStage] = useState<'flag' | 'pos' | 'club' | null>(null);
 
   useEffect(() => {
     if (!showCeremony) return;
     setCeremonyDone(false);
     setStage(null);
-    const timers = [
-      setTimeout(() => setStage('flag'), 500),
-      setTimeout(() => setStage('pos'), 1400),
-      setTimeout(() => setStage('club'), 2300),
-      setTimeout(() => setCeremonyDone(true), 3300),
-    ];
+    const HOLD_MS = 650; // 각 아이템이 완전히 보이는 시간
+    const GAP_MS = 300; // 사라진 뒤 다음 아이템이 뜨기 전 공백
+    const steps: Array<'flag' | 'pos' | 'club'> = best.player.teamLogo
+      ? ['flag', 'pos', 'club']
+      : ['flag', 'pos'];
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let t = 300;
+    steps.forEach((s) => {
+      timers.push(setTimeout(() => setStage(s), t));
+      t += HOLD_MS;
+      timers.push(setTimeout(() => setStage(null), t));
+      t += GAP_MS;
+    });
+    timers.push(setTimeout(() => setCeremonyDone(true), t));
     return () => timers.forEach(clearTimeout);
     // results identity changes on every new pack open (new array from the API)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,7 +147,13 @@ function PackRevealModal({
   const others = results.filter((x) => x !== best).sort((a, b) => (b.player.price || 0) - (a.player.price || 0));
 
   return (
-    <div id="pack-reveal">
+    <div
+      id="pack-reveal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && ceremonyDone) onClose();
+      }}
+    >
+      <div id="pack-reveal">
       {showCeremony && !ceremonyDone ? (
         <div id="pack-ceremony">
           <div id="cere-sparks">
@@ -155,13 +173,11 @@ function PackRevealModal({
             ))}
           </div>
           <div className="cere-items">
-            <span className={'cere-item' + (stage ? ' on' : '')}>{best.player.flag || '🌍'}</span>
-            <span className={'cere-item' + (stage === 'pos' || stage === 'club' ? ' on' : '')}>
-              {best.player.pos}
-            </span>
+            <span className={'cere-item' + (stage === 'flag' ? ' on' : '')}>{best.player.flag || '🌍'}</span>
+            <span className={'cere-item cere-pos' + (stage === 'pos' ? ' on' : '')}>{best.player.pos}</span>
             {best.player.teamLogo && (
               <img
-                className={'cere-item' + (stage === 'club' ? ' on' : '')}
+                className={'cere-item cere-club' + (stage === 'club' ? ' on' : '')}
                 src={best.player.teamLogo}
                 alt=""
               />
@@ -207,6 +223,7 @@ function PackRevealModal({
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
