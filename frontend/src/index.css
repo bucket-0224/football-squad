@@ -195,7 +195,13 @@ input:focus, select:focus { border-color: var(--blue); }
 #pvp-note { margin-bottom: 10px; }
 
 .squad-layout { display: grid; grid-template-columns: minmax(0, 460px) 1fr; gap: 20px; }
-@media (max-width: 800px) { .squad-layout { grid-template-columns: 1fr; } }
+@media (max-width: 800px) {
+  .squad-layout { grid-template-columns: 1fr; }
+  /* 모바일에서는 스쿼드 탭 전체가 한 스크롤로 이어져야 한다 — 보유 선수
+     목록이 자기만의 max-height/overflow-y를 유지하면 페이지 스크롤과
+     목록 내부 스크롤이 동시에 존재하는 "이중 스크롤"이 된다. */
+  #owned-list { max-height: none; overflow-y: visible; }
+}
 
 .pitch-toolbar { display: flex; gap: 8px; margin-bottom: 10px; }
 .pitch-toolbar select { flex: 1; }
@@ -354,8 +360,6 @@ input:focus, select:focus { border-color: var(--blue); }
 
 /* card + actions cell used in grids */
 .card-cell { display: flex; flex-direction: column; gap: 6px; }
-.card-drag-handle { cursor: grab; touch-action: none; }
-.card-drag-handle:active { cursor: grabbing; }
 /* 강화/판매 버튼이 한 줄에서 서로 공간을 다투며 텍스트가 잘리던 문제 —
    세로로 쌓아 각 버튼이 전체 폭을 쓰도록 함 */
 .card-cell .cc-actions { display: flex; flex-direction: column; gap: 6px; }
@@ -625,8 +629,9 @@ input:focus, select:focus { border-color: var(--blue); }
 .history-row {
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
   padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;
-  font-size: 14px; gap: 8px;
+  font-size: 14px; gap: 8px; cursor: pointer; transition: border-color .15s;
 }
+.history-row:hover { border-color: var(--green); }
 .history-row .h-score { font-weight: 900; }
 .history-row .h-outcome { font-weight: 800; font-size: 12px; }
 .h-outcome.win { color: var(--green); }
@@ -666,6 +671,35 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .news-detail-notes { margin: 0; padding-left: 18px; font-size: 12.5px; color: var(--dim); display: flex; flex-direction: column; gap: 4px; }
 .xg-bar .poss-home { background: var(--gold); }
+
+.match-detail-modal { max-width: 640px; }
+.contrib-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+@media (max-width: 560px) { .contrib-cols { grid-template-columns: 1fr; } }
+.contrib-col { display: flex; flex-direction: column; gap: 6px; }
+.contrib-col h4 { margin: 0 0 2px; }
+.contrib-row {
+  display: grid; grid-template-columns: 1fr auto 70px auto; align-items: center; gap: 6px;
+  background: var(--panel2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-size: 12.5px; color: inherit; cursor: pointer; text-align: left;
+}
+.contrib-row.active { border-color: var(--green); background: rgba(46,160,67,.12); }
+.contrib-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contrib-bar-track { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.contrib-bar-fill { display: block; height: 100%; background: var(--green); }
+.contrib-marks { display: flex; gap: 4px; white-space: nowrap; }
+
+.heatmap-panel { margin-top: 6px; }
+.heatmap-panel h4 { margin: 0 0 6px; }
+.heatmap-pitch {
+  position: relative; height: 220px; border-radius: 10px; border: 1px solid var(--border);
+  background: repeating-linear-gradient(0deg, var(--pitch1) 0 12.5%, var(--pitch2) 12.5% 25%);
+  overflow: hidden;
+}
+.heat-dot {
+  position: absolute; transform: translate(-50%, 50%); border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,90,60,.9) 0%, rgba(255,90,60,0) 70%);
+  pointer-events: none;
+}
 
 /* ===== picker / club-change modals ===== */
 /* ===== 우편함 ===== */
@@ -712,7 +746,7 @@ input:focus, select:focus { border-color: var(--blue); }
 .fit-bad { color: var(--red); }
 
 /* ===== transfer negotiation / complaint modal ===== */
-#nego-overlay, #complaint-overlay, #player-detail-overlay, #transfer-request-overlay, #account-settings-overlay, #news-detail-overlay {
+#nego-overlay, #complaint-overlay, #player-detail-overlay, #transfer-request-overlay, #account-settings-overlay, #news-detail-overlay, #match-detail-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px;
 }

@@ -69,6 +69,7 @@ function lineupOf(squad) {
     const p = raw && players.upgraded(raw, up[raw.id]); // 강화 반영
     if (!p) {
       return {
+        id: null,
         name: '유스',
         pos: slots[i] || 'CM',
         ovr: 40,
@@ -80,7 +81,7 @@ function lineupOf(squad) {
     // costs up to 10 OVR (CAM at RB etc.)
     const slotPos = slots[i] || p.pos;
     const pen = posPenalty(p.pos, slotPos);
-    return { name: p.name, pos: slotPos, ovr: Math.max(30, p.ovr - pen), attrs: p.attrs };
+    return { id: p.id, name: p.name, pos: slotPos, ovr: Math.max(30, p.ovr - pen), attrs: p.attrs };
   });
 }
 
@@ -578,7 +579,7 @@ function attach(server) {
   }
 
   function finishMatch(ctx) {
-    const { result, home, away, mode } = ctx;
+    const { result, home, away, mode, squads } = ctx;
     const { score } = result;
     // ctx.byMinute (not result.timeline) is the source of truth once a live
     // squad change has re-simulated the remainder — applyLiveSquad splices
@@ -626,6 +627,13 @@ function attach(server) {
       score,
       possession: result.possession,
       xg: result.xg,
+      // 경기 상세보기(히트맵/기여도)의 원재료 — 실제 이번 경기에 뛴 라인업
+      // (강화/포지션 변환 반영) 과 이벤트 타임라인을 그대로 보존한다.
+      homeFormation: (squads && squads.home && squads.home.formation) || DEFAULT_FORMATION,
+      awayFormation: (squads && squads.away && squads.away.formation) || DEFAULT_FORMATION,
+      homeLineup: home.lineup || [],
+      awayLineup: away.lineup || [],
+      timeline: playedEvents,
     });
 
     if (home.user) playing.delete(home.user.id);

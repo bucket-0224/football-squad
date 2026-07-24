@@ -41,6 +41,7 @@ function load() {
       if (!u.devotion || typeof u.devotion !== 'object') u.devotion = {};
       if (!Array.isArray(u.mailbox)) u.mailbox = [];
       if (typeof u.lastComplaintCheck !== 'number') u.lastComplaintCheck = 0;
+      if (typeof u.lastTransferCheck !== 'number') u.lastTransferCheck = 0;
     });
   } catch (err) {
     db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -105,6 +106,8 @@ function normalizeUser(u) {
   if (!Array.isArray(u.complaints)) u.complaints = u.complaint ? [u.complaint] : []; // 여러 건 누적되는 pending 선수 불만
   delete u.complaint;
   if (!u.lastComplaintCheck) u.lastComplaintCheck = 0;
+  if (!Array.isArray(u.transferRequests)) u.transferRequests = [];
+  if (!u.lastTransferCheck) u.lastTransferCheck = 0;
   if (!Array.isArray(u.mailbox)) u.mailbox = []; // 관리자 보상 우편함
   return u;
 }
@@ -151,6 +154,10 @@ function matchesForUser(userId, limit = 20) {
     .slice(0, limit);
 }
 
+function getMatchById(id) {
+  return load().matches.find((m) => m.id === id) || null;
+}
+
 // Unfiltered, for the news feed — every match across every user.
 function recentMatches(limit = 30) {
   return load().matches.slice(0, limit);
@@ -192,6 +199,7 @@ module.exports = {
   putUser,
   addMatch,
   matchesForUser,
+  getMatchById,
   recentMatches,
   bumpPlayerStat,
   getSeason,

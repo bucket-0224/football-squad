@@ -6,6 +6,7 @@ import { upgradedCard } from '../../game/cards';
 import PlayerCard from '../PlayerCard';
 import HexChart from '../HexChart';
 import OpponentSquadModal from '../OpponentSquadModal';
+import MatchDetailModal from '../MatchDetailModal';
 import type { LeaderboardRow, MatchRecord, SeasonHistoryEntry, SeasonStatus } from '../../types';
 
 type SubTab = 'board' | 'top' | 'perf';
@@ -45,6 +46,7 @@ function BoardSub({ onViewSquad }: { onViewSquad: (username: string) => void }) 
   const me = useAppStore((s) => s.me);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [matches, setMatches] = useState<MatchRecord[]>([]);
+  const [detailMatchId, setDetailMatchId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -114,7 +116,7 @@ function BoardSub({ onViewSquad }: { onViewSquad: (username: string) => void }) 
               const label = { win: '승', loss: '패', draw: '무' }[outcome];
               const date = new Date(m.at).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
               return (
-                <div className="history-row" key={m.id}>
+                <div className="history-row" key={m.id} onClick={() => setDetailMatchId(m.id)}>
                   <span className={`h-outcome ${outcome}`}>{label}</span>
                   <span>vs {oppName}</span>
                   <span className="h-score">
@@ -129,6 +131,7 @@ function BoardSub({ onViewSquad }: { onViewSquad: (username: string) => void }) 
           )}
         </div>
       </div>
+      {detailMatchId && <MatchDetailModal matchId={detailMatchId} onClose={() => setDetailMatchId(null)} />}
     </div>
   );
 }

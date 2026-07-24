@@ -174,6 +174,25 @@ export interface LeaderboardRow {
   ovr: number;
 }
 
+export interface MatchLineupPlayer {
+  id: string | null;
+  name: string;
+  pos: string;
+  ovr: number;
+  youth?: boolean;
+}
+
+export interface MatchTimelineEvent {
+  minute: number;
+  type: string;
+  team: 'home' | 'away';
+  player?: string | null;
+  playerId?: string | null;
+  assist?: string | null;
+  assistId?: string | null;
+  via?: string | null;
+}
+
 export interface MatchRecord {
   id: string;
   at: string;
@@ -185,6 +204,28 @@ export interface MatchRecord {
   score: { home: number; away: number };
   possession?: { home: number; away: number };
   xg?: { home: number; away: number };
+  homeFormation?: string;
+  awayFormation?: string;
+  homeLineup?: MatchLineupPlayer[];
+  awayLineup?: MatchLineupPlayer[];
+  timeline?: MatchTimelineEvent[];
+}
+
+export interface MatchContribution {
+  id: string | null;
+  name: string;
+  pos: string;
+  ovr: number;
+  slot: number;
+  youth: boolean;
+  goals: number;
+  assists: number;
+  score: number;
+}
+
+export interface MatchDetail {
+  match: MatchRecord;
+  contributions: { home: MatchContribution[]; away: MatchContribution[] };
 }
 
 export interface SeasonStatus {

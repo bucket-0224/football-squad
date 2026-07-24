@@ -665,6 +665,39 @@ app.get('/api/matches', auth.authMiddleware, (req, res) => {
   res.json({ matches: store.matchesForUser(req.user.id, 20) });
 });
 
+// 경기 상세보기: 실제 그 경기에 뛴 라인업 + 이벤트 타임라인을 바탕으로 선수별
+// 기여도 점수를 계산한다 (히트맵은 프론트에서 이 라인업의 slot 좌표를 이용해
+// 그린다 — 별도 위치 로그를 남기지 않으므로 fabricate 하지 않는 선에서
+// 실제 이번 경기 데이터(포메이션 슬롯 · 점유율 · 득점/도움)만 사용).
+function computeContributions(lineup, timeline, team, cleanSheet) {
+  return (lineup || [])
+    .map((p, slot) => {
+      const goals = p.id ? timeline.filter((e) => e.type === 'goal' && e.team === team && e.playerId === p.id).length : 0;
+      const assists = p.id
+        ? timeline.filter((e) => e.type === 'goal' && e.team === team && e.assistId === p.id).length
+        : 0;
+      let score = Math.round(((p.ovr - 40) / 60) * 40) + goals * 20 + assists * 12;
+      if (cleanSheet && (p.pos === 'GK' || LINE[p.pos] === 'DEF')) score += 15;
+      return { id: p.id, name: p.name, pos: p.pos, ovr: p.ovr, slot, youth: !!p.youth, goals, assists, score: Math.max(5, Math.min(100, score)) };
+    })
+    .sort((a, b) => b.score - a.score);
+}
+
+app.get('/api/matches/:id', auth.authMiddleware, (req, res) => {
+  const m = store.getMatchById(req.params.id);
+  if (!m) return bad(res, 404, '경기 기록을 찾을 수 없습니다.');
+  const timeline = m.timeline || [];
+  const homeCleanSheet = m.score.away === 0;
+  const awayCleanSheet = m.score.home === 0;
+  res.json({
+    match: m,
+    contributions: {
+      home: computeContributions(m.homeLineup, timeline, 'home', homeCleanSheet),
+      away: computeContributions(m.awayLineup, timeline, 'away', awayCleanSheet),
+    },
+  });
+});
+
 // Read-only view of another user's squad — for the 랭킹 tab's "스쿼드 보기"
 // (scouting/copy-strategy). Never exposes account fields, only squad shape.
 app.get('/api/user/:username/squad', auth.authMiddleware, (req, res) => {

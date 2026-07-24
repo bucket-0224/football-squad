@@ -35,8 +35,8 @@ const ISSUES = [
   },
 ];
 
-const CHECK_COOLDOWN_MS = 30 * 60 * 1000; // at most one roll per 30 real minutes
-const RAISE_CHANCE = 0.12;
+const CHECK_COOLDOWN_MS = 3 * 60 * 1000; // at most one roll per 3 real minutes — keeps notifications arriving often enough that the game feels "live"
+const RAISE_CHANCE = 0.9; // high — the 3-min cooldown is what paces things, not this roll
 const MAX_PENDING = 5; // stop rolling new ones once this many are unread
 
 function clamp(v, lo, hi) {
@@ -102,7 +102,7 @@ function resolveComplaint(user, complaintId, choiceId) {
   return { satisfied: !!choice.satisfies, devotion: user.devotion[playerId] };
 }
 
-const SWEEP_INTERVAL_MS = 10 * 60 * 1000; // finer than CHECK_COOLDOWN_MS so the per-user cooldown, not tick granularity, governs odds
+const SWEEP_INTERVAL_MS = 60 * 1000; // finer than CHECK_COOLDOWN_MS so the per-user cooldown, not tick granularity, governs odds
 
 // ---------------------------------------------------------------------------
 // 이적 요청 (transfer request): a player whose devotion has cratered asks to
@@ -110,11 +110,14 @@ const SWEEP_INTERVAL_MS = 10 * 60 * 1000; // finer than CHECK_COOLDOWN_MS so the
 // complaints, since by this point goodwill is already gone.
 // ---------------------------------------------------------------------------
 const TRANSFER_REQUEST_DEVOTION_THRESHOLD = 15;
-const TRANSFER_REQUEST_CHANCE = 0.05; // per critically-low player per sweep tick
+const TRANSFER_REQUEST_CHANCE = 0.05; // per critically-low player, gated by CHECK_COOLDOWN_MS like complaints
 
 function maybeRaiseTransferRequest(user) {
   if (!Array.isArray(user.owned) || !user.owned.length) return;
   if (!user.transferRequests) user.transferRequests = [];
+  const now = Date.now();
+  if (now - (user.lastTransferCheck || 0) < CHECK_COOLDOWN_MS) return;
+  user.lastTransferCheck = now;
   const pending = new Set(user.transferRequests.map((r) => r.playerId));
   const candidates = user.owned.filter(
     (id) => (user.devotion[id] ?? 60) < TRANSFER_REQUEST_DEVOTION_THRESHOLD && !pending.has(id)
