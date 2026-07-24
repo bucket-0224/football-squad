@@ -377,11 +377,19 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
   const nextRoles = {};
   const rolesSrc = roles !== undefined ? roles : prev.roles || {};
   for (const [pid, roleId] of Object.entries(rolesSrc || {})) {
-    if (!starters.includes(pid)) continue; // stale entry for a benched player
+    const slotIdx = starters.indexOf(pid);
+    if (slotIdx < 0) continue; // stale entry for a benched player
     const role = ROLE_DEFS[roleId];
     if (!role) return bad(res, 400, '알 수 없는 선수 유형입니다.');
     const p = players.getPlayer(pid);
-    if (!p || !role.pos.includes(p.pos)) {
+    // 요청: "현재 맞지 않는 포지션에 있더라도 유형 적용은 상관없이 되게
+    // 해주고(공미여도 윙어면 윙어 스타일 플레이)" — 선수 본인의 실제
+    // 포지션(p.pos)이 아니라 지금 배치된 슬롯(slots[slotIdx])이 그 유형에
+    // 맞는지로 검사한다. simulate.js의 roleAwareScore(경기 시뮬레이션에서
+    // 실제로 유형을 적용하는 지점)도 이미 같은 기준으로 고쳤다 — 여기서
+    // p.pos로 막아버리면 그쪽 수정이 무의미해진다(애초에 저장이 거부되니
+    // 경기에 반영될 일이 없음).
+    if (!p || !role.pos.includes(slots[slotIdx])) {
       return bad(res, 400, `${p ? p.name : '선수'}에게는 적용할 수 없는 유형입니다.`);
     }
     nextRoles[pid] = roleId;

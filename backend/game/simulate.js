@@ -141,12 +141,19 @@ const ROLE_EMPHASIS = {
   noNonsenseCB: { shooting: 0, passing: 0 },
 };
 
-// Only apply a role if it's actually valid for the card's real position —
-// stale role assignments after a position swap silently fall back to the
-// slot's default line formula instead of producing nonsense ratings.
-function roleAwareScore(player, slotLine, roleId) {
+// Only apply a role if it's valid for where the card is actually PLAYING
+// (the formation slot it occupies), not the card's own real position —
+// 요청: "현재 맞지 않는 포지션에 있더라도 유형 적용은 상관없이 되게 해주고
+// (공미여도 윙어면 윙어 스타일 플레이)". 예전엔 player.pos(카탈로그 상의
+// 실제 포지션)로만 검사해서, 프론트 유형 선택기(RolePicker)가 배치 기준으로
+// 옵션을 보여주더라도 실제 경기 시뮬레이션에서는 "포지션이 안 맞는다"며
+// 조용히 무시되고 매번 기본 라인 공식으로 되돌아갔었다 — 즉 화면에는
+// 골랐다고 나오는데 실제 능력치엔 반영이 안 되는 버그. slotPos(그 슬롯에
+// 배정된 포메이션 포지션 라벨, 선수 교체/스왑을 그대로 반영)를 기준으로
+// 바꿔서 프론트의 배치 기준 판정과 일치시킨다.
+function roleAwareScore(player, slotLine, slotPos, roleId) {
   const role = roleId && ROLE_DEFS[roleId];
-  if (role && role.pos.includes(player.pos)) return role.score(player.attrs);
+  if (role && role.pos.includes(slotPos)) return role.score(player.attrs);
   return roleScore(player.attrs, slotLine);
 }
 
@@ -205,8 +212,8 @@ function computeRatings(squad) {
     else if (viceCaptainId && id === viceCaptainId) mult *= 1.025;
     const roleId = roleMap ? roleMap[id] : null;
     const role = roleId && ROLE_DEFS[roleId];
-    const effectiveRoleId = role && role.pos.includes(p.pos) ? roleId : defaultRoleIdFor(p.pos);
-    const score = roleAwareScore(p, slotLine, roleId) * mult;
+    const effectiveRoleId = role && role.pos.includes(slotPos) ? roleId : defaultRoleIdFor(slotPos);
+    const score = roleAwareScore(p, slotLine, slotPos, roleId) * mult;
     lines[slotLine].push(score);
     roster.push({ player: p, slotPos, slotLine, chem, score, roleId: effectiveRoleId });
   });

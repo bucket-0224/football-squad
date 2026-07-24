@@ -204,6 +204,17 @@ export default function SquadTab() {
       ? squad.slotCoords.map((c, i) => c || baseCoords[i] || [50, 50])
       : baseCoords;
 
+  // 요청: "완전히 라인에 있는 선수의 수 대로 포메이션을 결정하게... 스피너에
+  // 없는데 그 라인 자체에 배치가 된 경우를 위함(예: 4-1-2-3, 4-2-4)" —
+  // squad.formation은 여전히 백엔드가 아는 5개 프리셋 중 하나로 저장되지만
+  // (역할/밴드 계산이 그 슬롯 라벨 배열에 의존하므로), 화면에 보여주는
+  // 포메이션 "이름"은 그와 무관하게 지금 실제 좌표 배치를 그대로 라인별로
+  // 세어(clusterLineCounts, GK 제외) 매 순간 다시 계산한다 — 5개 프리셋에
+  // 없는 배치라도 있는 그대로("4-2-4" 등) 보여준다.
+  const formationLabel = clusterLineCounts(
+    coords.filter((_, i) => slots[i] !== 'GK').map(([, y]) => y)
+  ).join('-');
+
   // 픽커 모달(PickerModal.assign)과 동일한 배치/스왑 로직 — 대상 슬롯에 이미
   // 있는 다른 슬롯의 선수를 드래그해 놓으면 자동으로 두 자리가 맞바뀐다.
   const assignToSlot = async (playerId: string, targetSlot: number) => {
@@ -340,18 +351,6 @@ export default function SquadTab() {
     fn();
   };
 
-  const onFormationChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const formation = e.target.value;
-    const slotCount = bootstrap.formations[formation].length;
-    const starters = squad.starters.slice(0, slotCount);
-    while (starters.length < slotCount) starters.push(null);
-    try {
-      await saveSquad({ formation, starters });
-    } catch (err) {
-      toast(err instanceof Error ? err.message : String(err));
-    }
-  };
-
   const onTacticChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     const tactic = e.target.value;
     try {
@@ -409,13 +408,9 @@ export default function SquadTab() {
       <div className="squad-layout">
         <div className="pitch-col">
           <div className="pitch-toolbar">
-            <select id="formation-select" value={squad.formation} onChange={onFormationChange}>
-              {Object.keys(bootstrap.formations).map((f) => (
-                <option key={f} value={f}>
-                  {f}
-                </option>
-              ))}
-            </select>
+            <div id="formation-label" className="formation-label" title="현재 배치를 라인별 인원수로 계산한 포메이션">
+              포메이션 {formationLabel}
+            </div>
             <select
               id="tactic-select"
               title="전술"
