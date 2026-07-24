@@ -8,6 +8,25 @@
     "cleartext": true
   },
   "android": {
-    "backgroundColor": "#0d1117"
+    "backgroundColor": "#0d1117",
+    "overrideUserAgent": null,
+    "webContentsDebuggingEnabled": false
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "launchAutoHide": true,
+      "backgroundColor": "#0d1117",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "showSpinner": false,
+      "splashFullScreen": true,
+      "splashImmersive": true
+    },
+    "StatusBar": {
+      "overlaysWebView": false,
+      "style": "DARK",
+      "backgroundColor": "#0d1117"
+    }
   }
 }
