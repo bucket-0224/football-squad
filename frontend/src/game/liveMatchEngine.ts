@@ -166,6 +166,19 @@ function vizShortName(name: string | undefined): string {
   return last.length > 10 ? last.slice(0, 9) + '…' : last;
 }
 
+// Backend event text embeds the player's full catalog name verbatim (e.g.
+// "⚽ Kane (Ultra) 골!"), same source as the sprite label bug fixed earlier —
+// but that fix only touched the sprite label, not this text. Since `player`/
+// `assist` are guaranteed exact substrings of `text` (the backend
+// interpolates them directly), swap them for the short form wherever they
+// appear so the live toast reads the same name as the pitch sprite.
+function shortenEventText(text: string, player?: string | null, assist?: string | null): string {
+  let out = text;
+  if (player) out = out.split(player).join(vizShortName(player));
+  if (assist) out = out.split(assist).join(vizShortName(assist));
+  return out;
+}
+
 // Vertical editor coords [x%, y% from own goal] -> top view (home attacks →).
 function vizSpot(coord: [number, number], isHome: boolean): { x: number; y: number } {
   const [xv, yv] = coord;
@@ -360,6 +373,7 @@ export class LiveMatchEngine {
   }
 
   onEvent(e: MatchEvent) {
+    e.text = shortenEventText(e.text, e.player, e.assist);
     if (this.raf) this.queue.push(e);
     else this.cb.onFeedItem(e.minute + "'", e.text, e.type);
   }
@@ -867,7 +881,7 @@ export class LiveMatchEngine {
         if (this.runner === dot) this.runner = null;
       }
       const label = e.type === 'injury' ? '부상' : '태업';
-      this.banner(`🚑 ${label} — ${e.player}`, e.type === 'injury' ? 'red' : 'yellow', 2600);
+      this.banner(`🚑 ${label} — ${short}`, e.type === 'injury' ? 'red' : 'yellow', 2600);
       return;
     }
 
@@ -971,7 +985,11 @@ export class LiveMatchEngine {
             this.flash = { text: '⚽ GOAL!', until: this.now + 1500 };
             this.carrier = null;
             feed();
-            this.cb.onBanner(`⚽ ${e.player} 골!${e.assist ? ` (도움: ${e.assist})` : ''}`, 'goal', 3000);
+            this.cb.onBanner(
+              `⚽ ${vizShortName(e.player)} 골!${e.assist ? ` (도움: ${vizShortName(e.assist)})` : ''}`,
+              'goal',
+              3000
+            );
             if (e.score) this.cb.onScore(e.score.home, e.score.away);
           },
         });
@@ -996,7 +1014,7 @@ export class LiveMatchEngine {
           onDone: () => {
             feed();
             this.flash = { text: '❌ 득점 취소', until: this.now + 1400 };
-            this.cb.onBanner(`🚩 오프사이드 — ${e.player} 득점 취소`, 'offside', 2600);
+            this.cb.onBanner(`🚩 오프사이드 — ${vizShortName(e.player)} 득점 취소`, 'offside', 2600);
             done();
             this.takeover(defSide, defGK);
             this.goalKick = true;
@@ -1269,16 +1287,15 @@ export class LiveMatchEngine {
             (d.chaser && !d.chaser.gk ? d.chaser : null);
           if (dot) dot.off = true;
           this.say(`🟥 ${this.name(dot)} 퇴장! 팀은 10명으로 싸웁니다`);
-          this.banner(`🟥 레드카드 — ${d.e.player}`, 'red', 3000);
+          this.banner(`🟥 레드카드 — ${short}`, 'red', 3000);
         } else if (d.e.type === 'card') {
           // the small commentary line and the banner named different players
           // before — chaser (nearest defender) vs d.e.player (actually
           // booked) — match by name here too so both agree.
-          const booked =
-            this.team(d.e.team).find((pl) => !pl.off && !pl.gk && pl.label === vizShortName(d.e.player)) ||
-            d.chaser;
+          const cardedShort = vizShortName(d.e.player);
+          const booked = this.team(d.e.team).find((pl) => !pl.off && !pl.gk && pl.label === cardedShort) || d.chaser;
           this.say(`${this.name(booked ?? null)}의 거친 태클 — 휘슬이 울립니다`);
-          this.banner(`🟨 옐로카드 — ${d.e.player}`, 'yellow', 2200);
+          this.banner(`🟨 옐로카드 — ${cardedShort}`, 'yellow', 2200);
         } else {
           this.say(`${this.name(d.chaser ?? null)}의 거친 태클 — 휘슬이 울립니다`);
         }
