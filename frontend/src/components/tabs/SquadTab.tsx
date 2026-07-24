@@ -130,6 +130,33 @@ interface DragGhost {
   y: number;
 }
 
+function clampPct(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+// backend/game/formations.js의 LINE 테이블과 동일 — 포지션 라벨을 넓은 라인으로 묶는다.
+const LINE_OF: Record<string, 'DEF' | 'MID' | 'ATT'> = {
+  CB: 'DEF', LB: 'DEF', RB: 'DEF', LWB: 'DEF', RWB: 'DEF',
+  CDM: 'MID', CM: 'MID', CAM: 'MID', LM: 'MID', RM: 'MID',
+  LW: 'ATT', RW: 'ATT', CF: 'ATT', ST: 'ATT',
+};
+
+// COORDS의 실제 y값 분포(수비 17~22 / 미드 34~58 / 공격 64~82)에서 뜬 간격의
+// 중간값 — 자유 배치 후 어느 라인에 몇 명이 있는지 셀 때 쓰는 경계.
+const DEF_MID_BOUND = 28;
+const MID_ATT_BOUND = 61;
+
+function formationSignature(posList: string[]): [number, number, number] {
+  let d = 0, m = 0, a = 0;
+  for (const pos of posList) {
+    const line = LINE_OF[pos];
+    if (line === 'DEF') d++;
+    else if (line === 'MID') m++;
+    else if (line === 'ATT') a++;
+  }
+  return [d, m, a];
+}
+
 export default function SquadTab() {
   const { me, squadMode, setSquadMode, bootstrap, catalog, saveSquad, autoPlaceSquad } = useAppStore();
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
@@ -138,11 +165,18 @@ export default function SquadTab() {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [ghost, setGhost] = useState<DragGhost | null>(null);
   const [dropSlot, setDropSlot] = useState<number | null>(null);
+  // 배치 편집 모드: on이면 카드를 드래그해도 선수를 스왑하는 대신 그 슬롯
+  // 자체의 피치 위 좌표를 옮긴다 — 포메이션이 정해준 자리에 갇히지 않고
+  // 언제든 자유롭게 전술 위치를 조정할 수 있게 하기 위함.
+  const [posMode, setPosMode] = useState(false);
+  const [draftCoord, setDraftCoord] = useState<{ i: number; x: number; y: number } | null>(null);
+  const pitchRef = useRef<HTMLDivElement>(null);
 
   // pointerdown~pointerup 사이의 진행 중 드래그 정보. React state가 아니라
   // ref인 이유: pointermove마다 리렌더할 필요 없이 ghost(state)로만 반영하고,
   // "지금 드래그 중인지"는 클릭 억제 판단(justDraggedRef)에도 즉시 필요해서다.
   const dragRef = useRef<{ playerId: string; card: CatalogPlayer; startX: number; startY: number; moved: boolean } | null>(null);
+  const posDragRef = useRef<{ slotIndex: number; startX: number; startY: number; moved: boolean } | null>(null);
   const justDraggedRef = useRef(false);
 
   if (!me || !bootstrap) return null;
@@ -150,7 +184,11 @@ export default function SquadTab() {
   const squad = activeSquad(me, squadMode);
   const ratings = activeRatings(me, squadMode);
   const slots = bootstrap.formations[squad.formation] || [];
-  const coords = COORDS[squad.formation] || COORDS['4-3-3'];
+  const baseCoords = COORDS[squad.formation] || COORDS['4-3-3'];
+  const coords: [number, number][] =
+    squad.slotCoords && squad.slotCoords.length === slots.length
+      ? squad.slotCoords.map((c, i) => c || baseCoords[i] || [50, 50])
+      : baseCoords;
 
   // 픽커 모달(PickerModal.assign)과 동일한 배치/스왑 로직 — 대상 슬롯에 이미
   // 있는 다른 슬롯의 선수를 드래그해 놓으면 자동으로 두 자리가 맞바뀐다.
@@ -171,8 +209,32 @@ export default function SquadTab() {
     dragRef.current = { playerId, card, startX: x, startY: y, moved: false };
   };
 
+  const beginPosDrag = (slotIndex: number, x: number, y: number) => {
+    posDragRef.current = { slotIndex, startX: x, startY: y, moved: false };
+  };
+
+  const pitchPct = (clientX: number, clientY: number) => {
+    const rect = pitchRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    return {
+      x: clampPct(((clientX - rect.left) / rect.width) * 100, 3, 97),
+      y: clampPct(((rect.bottom - clientY) / rect.height) * 100, 2, 92),
+    };
+  };
+
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
+      const pd = posDragRef.current;
+      if (pd) {
+        if (!pd.moved) {
+          const dist = Math.hypot(e.clientX - pd.startX, e.clientY - pd.startY);
+          if (dist < DRAG_THRESHOLD_PX) return;
+          pd.moved = true;
+        }
+        const pct = pitchPct(e.clientX, e.clientY);
+        if (pct) setDraftCoord({ i: pd.slotIndex, x: pct.x, y: pct.y });
+        return;
+      }
       const d = dragRef.current;
       if (!d) return;
       if (!d.moved) {
@@ -186,6 +248,18 @@ export default function SquadTab() {
       setDropSlot(slotEl ? Number(slotEl.dataset.slot) : null);
     };
     const onUp = (e: PointerEvent) => {
+      const pd = posDragRef.current;
+      posDragRef.current = null;
+      if (pd && pd.moved) {
+        justDraggedRef.current = true;
+        const pct = pitchPct(e.clientX, e.clientY);
+        if (pct) {
+          const next = coords.map((c, idx) => (idx === pd.slotIndex ? [pct.x, pct.y] : c)) as [number, number][];
+          saveSquad({ slotCoords: next }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
+        }
+        setDraftCoord(null);
+        return;
+      }
       const d = dragRef.current;
       dragRef.current = null;
       if (d && d.moved) {
@@ -204,7 +278,42 @@ export default function SquadTab() {
       window.removeEventListener('pointerup', onUp);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [squad.starters]);
+  }, [squad.starters, coords]);
+
+  const onResetCoords = () => {
+    saveSquad({ slotCoords: null }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
+  };
+
+  // 배치 편집을 끝낼 때, 자유롭게 옮긴 위치를 기준으로 라인별(수비/미드/공격)
+  // 인원수를 다시 세서 가장 가까운 포메이션 이름을 스피너에 반영한다 — 골키퍼는
+  // 항상 slots[0]이라 라인 집계에서 제외(=이동 대상에서도 제외, 아래 onPointerDown 참고).
+  const onTogglePosMode = () => {
+    if (posMode) {
+      let d = 0, m = 0, a = 0;
+      coords.forEach(([, y], i) => {
+        if (slots[i] === 'GK') return;
+        if (y < DEF_MID_BOUND) d++;
+        else if (y < MID_ATT_BOUND) m++;
+        else a++;
+      });
+      let best: string | null = null;
+      let bestDist = Infinity;
+      for (const name of Object.keys(bootstrap.formations)) {
+        const [fd, fm, fa] = formationSignature(bootstrap.formations[name]);
+        const dist = Math.abs(fd - d) + Math.abs(fm - m) + Math.abs(fa - a);
+        if (dist < bestDist || (dist === bestDist && name === squad.formation)) {
+          bestDist = dist;
+          best = name;
+        }
+      }
+      if (best && best !== squad.formation) {
+        saveSquad({ formation: best, slotCoords: coords }).catch((err) =>
+          toast(err instanceof Error ? err.message : String(err))
+        );
+      }
+    }
+    setPosMode((v) => !v);
+  };
 
   // 드래그 직후 이어지는 합성 click을 삼켜서, 슬롯을 드래그로 옮긴 뒤에
   // 곧바로 픽커 모달이 열리는 걸 막는다.
@@ -307,7 +416,21 @@ export default function SquadTab() {
             <button type="button" className="btn small" onClick={onAuto}>
               자동배치
             </button>
+            <button type="button" className={'btn small' + (posMode ? ' primary' : '')} onClick={onTogglePosMode}>
+              {posMode ? '배치 편집 완료' : '🎯 배치 편집'}
+            </button>
+            {squad.slotCoords && (
+              <button type="button" className="btn small ghost" onClick={onResetCoords}>
+                위치 초기화
+              </button>
+            )}
           </div>
+          {posMode && (
+            <p className="dim small-text pos-edit-hint">
+              선수 카드를 드래그하면 그 자리(슬롯)가 피치 위 원하는 위치로 옮겨집니다. 포메이션 틀에 얽매이지 않고 자유롭게 조정하세요. (골키퍼는 이동할 수 없습니다.)
+              편집을 마치면 배치에 맞는 포메이션이 자동으로 선택됩니다.
+            </p>
+          )}
           <div className="pitch-toolbar captain-toolbar">
             <span className="dim small-text">주장</span>
             <select id="captain-select" value={squad.captain || ''} onChange={onCaptainChange}>
@@ -328,7 +451,7 @@ export default function SquadTab() {
               ))}
             </select>
           </div>
-          <div id="pitch">
+          <div id="pitch" ref={pitchRef} className={posMode ? 'pos-editing' : ''}>
             <div className="pitch-lines">
               <div className="center-circle" />
               <div className="halfway" />
@@ -339,11 +462,19 @@ export default function SquadTab() {
               const id = squad.starters[i];
               const p = id ? upgradedCard(me, catalog.get(id)) : null;
               const badge = id && id === squad.captain ? 'C' : id && id === squad.viceCaptain ? 'VC' : undefined;
-              const [x, y] = coords[i] || [50, 50];
+              const [bx, by] = coords[i] || [50, 50];
+              const [x, y] = draftCoord && draftCoord.i === i ? [draftCoord.x, draftCoord.y] : [bx, by];
               return (
                 <div
                   key={i}
-                  className={'slot' + (ghost ? ' drop-target' : '') + (dropSlot === i ? ' drop-hover' : '')}
+                  className={
+                    'slot' +
+                    (ghost ? ' drop-target' : '') +
+                    (dropSlot === i ? ' drop-hover' : '') +
+                    (posMode && pos !== 'GK' ? ' pos-editable' : '') +
+                    (posMode && pos === 'GK' ? ' pos-locked' : '') +
+                    (draftCoord && draftCoord.i === i ? ' pos-dragging' : '')
+                  }
                   data-slot={i}
                   style={{ left: x + '%', bottom: y + '%' }}
                 >
@@ -351,7 +482,11 @@ export default function SquadTab() {
                     type="button"
                     className="slot-assign"
                     onClick={guardClick(() => setPickerSlot(i))}
-                    onPointerDown={(e) => p && beginDrag(p.id, p, e.clientX, e.clientY)}
+                    onPointerDown={(e) => {
+                      // 골키퍼는 항상 골문 근처에 고정 — 배치 편집 모드에서도 옮길 수 없다.
+                      if (posMode && pos !== 'GK') beginPosDrag(i, e.clientX, e.clientY);
+                      else if (!posMode && p) beginDrag(p.id, p, e.clientX, e.clientY);
+                    }}
                   >
                     {p ? <PlayerCard player={convertedCard(p, pos)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
                   </button>

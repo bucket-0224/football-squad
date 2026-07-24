@@ -290,8 +290,18 @@ app.get('/api/me', auth.authMiddleware, (req, res) => {
 });
 
 // kind: 'main' (클럽 스쿼드) or 'pvp' (실전 스쿼드 — 뽑은 카드만 배치 가능).
+// 선수 배치 좌표(%, 피치 기준 left/bottom)를 [0,100] 범위 안으로 눌러 담는다 —
+// 잘못된 값이 카드가 피치 밖으로 나가거나 저장이 깨지는 걸 막는 최소한의 안전장치.
+function clampSlotCoord(c) {
+  if (!Array.isArray(c) || c.length !== 2) return null;
+  const x = Number(c[0]);
+  const y = Number(c[1]);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return [Math.max(3, Math.min(97, x)), Math.max(2, Math.min(92, y))];
+}
+
 app.put('/api/squad', auth.authMiddleware, (req, res) => {
-  const { formation, starters, tactic, kind, captain, viceCaptain, roles } = req.body || {};
+  const { formation, starters, tactic, kind, captain, viceCaptain, roles, slotCoords } = req.body || {};
   const isPvp = kind === 'pvp';
   if (!FORMATIONS[formation]) return bad(res, 400, '알 수 없는 포메이션입니다.');
   if (!Array.isArray(starters) || starters.length !== 11) {
@@ -355,6 +365,25 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
     }
     nextRoles[pid] = roleId;
   }
+  // 요청에 slotCoords가 명시되면 그 값을 그대로 반영(같은 요청에서 포메이션이
+  // 함께 바뀌어도 사용자가 새 포메이션 기준으로 넘긴 좌표를 우선한다). 명시되지
+  // 않았는데 포메이션만 바뀌면 슬롯 배치 자체(라인/역할)가 달라지므로 이전
+  // 커스텀 좌표는 더 이상 의미가 없어 초기화하고, 포메이션이 그대로면 유지.
+  let nextSlotCoords;
+  if (slotCoords !== undefined) {
+    if (slotCoords === null) {
+      nextSlotCoords = null;
+    } else {
+      if (!Array.isArray(slotCoords) || slotCoords.length !== starters.length) {
+        return bad(res, 400, '선수 배치 좌표 형식이 올바르지 않습니다.');
+      }
+      nextSlotCoords = slotCoords.map(clampSlotCoord);
+    }
+  } else if (formation !== prev.formation) {
+    nextSlotCoords = null;
+  } else {
+    nextSlotCoords = prev.slotCoords || null;
+  }
   req.user[target] = {
     formation,
     starters,
@@ -362,6 +391,7 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
     captain: nextCaptain,
     viceCaptain: nextVice,
     roles: nextRoles,
+    slotCoords: nextSlotCoords,
   };
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user) });
@@ -388,6 +418,10 @@ app.post('/api/squad/auto', auth.authMiddleware, (req, res) => {
     captain: squad.captain && starters.includes(squad.captain) ? squad.captain : null,
     viceCaptain: squad.viceCaptain && starters.includes(squad.viceCaptain) ? squad.viceCaptain : null,
     roles: nextRoles,
+    // 자동배치는 어떤 선수가 어느 슬롯에 가는지만 바꿀 뿐 슬롯의 화면상
+    // 위치(포메이션 동일 시)는 그대로이므로, 사용자가 드래그로 잡아둔
+    // 커스텀 좌표는 유지한다.
+    slotCoords: formation === squad.formation ? squad.slotCoords || null : null,
   };
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user) });
@@ -552,6 +586,7 @@ app.post('/api/club/change', auth.authMiddleware, async (req, res) => {
     captain: null,
     viceCaptain: null,
     roles: {},
+    slotCoords: null,
   };
   const nowOwned = new Set(req.user.owned);
   req.user.pvpSquad.starters = req.user.pvpSquad.starters.map((id) =>

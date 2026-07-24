@@ -269,6 +269,18 @@ input:focus, select:focus { border-color: var(--blue); }
 .slot.drop-target { box-shadow: 0 0 0 1px rgba(255,255,255,.25); }
 .slot.drop-hover { box-shadow: 0 0 0 2px var(--green); background: rgba(46,160,67,.18); }
 
+/* 배치 편집 모드: 포메이션이 정해준 자리가 아니라 카드를 드래그한 위치
+   그대로 슬롯이 옮겨간다는 걸 보여주기 위한 시각적 신호. */
+#pitch.pos-editing { box-shadow: inset 0 0 0 2px var(--green); }
+.slot.pos-editable { cursor: grab; }
+.slot.pos-editable .slot-assign { cursor: grab; }
+/* 골키퍼 슬롯: 배치 편집 모드에서도 이동 불가 — 잡을 수 없다는 걸 커서로 표시 */
+.slot.pos-locked { cursor: not-allowed; opacity: .92; }
+.slot.pos-locked .slot-assign { cursor: not-allowed; }
+.slot.pos-dragging { cursor: grabbing; z-index: 20; box-shadow: 0 0 0 2px var(--gold); }
+.slot.pos-dragging .slot-assign { cursor: grabbing; }
+.pos-edit-hint { margin: -4px 0 10px; }
+
 /* 드래그 중 포인터를 따라다니는 카드 미리보기 — elementFromPoint로 놓을
    위치를 판단해야 하므로 pointer-events는 반드시 꺼둔다 */
 .drag-ghost {
@@ -735,7 +747,10 @@ input:focus, select:focus { border-color: var(--blue); }
 
 /* ===== picker / club-change modals ===== */
 /* ===== 우편함 ===== */
-.mailbox-btn { position: relative; }
+/* .btn의 overflow:hidden(리플 효과용)이 배지의 음수 offset(top/right:-6px)을
+   잘라내므로, 이 버튼만 명시적으로 되돌린다 — 리플이 버튼 모서리를 살짝
+   넘칠 수 있지만, 안 읽은 개수 배지가 잘려 보이지 않는 것보다는 낫다. */
+.mailbox-btn { position: relative; overflow: visible; }
 .mailbox-badge {
   position: absolute; top: -6px; right: -6px;
   background: var(--red); color: #fff; border-radius: 999px;

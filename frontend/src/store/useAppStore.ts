@@ -22,6 +22,7 @@ export interface SquadPatch {
   captain?: string | null;
   viceCaptain?: string | null;
   roles?: Record<string, string>;
+  slotCoords?: ([number, number] | null)[] | null;
 }
 
 export interface EnhanceResult {

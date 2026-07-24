@@ -36,7 +36,7 @@ const ISSUES = [
   },
 ];
 
-const CHECK_COOLDOWN_MS = 10 * 60 * 1000; // at most one roll per 10 real minutes
+const CHECK_COOLDOWN_MS = 60 * 60 * 1000; // at most one roll per 60 real minutes — 10min was too naggy at RAISE_CHANCE=0.9 (near-guaranteed new complaint every 10 min)
 const RAISE_CHANCE = 0.9; // high — the cooldown is what paces things, not this roll
 const MAX_PENDING = 5; // stop rolling new ones once this many are unread
 

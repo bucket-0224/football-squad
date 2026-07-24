@@ -87,6 +87,7 @@ function normalizeUser(u) {
   if (u.squad.captain === undefined) u.squad.captain = null;
   if (u.squad.viceCaptain === undefined) u.squad.viceCaptain = null;
   if (!u.squad.roles || typeof u.squad.roles !== 'object') u.squad.roles = {}; // id -> role
+  if (u.squad.slotCoords === undefined) u.squad.slotCoords = null; // 사용자가 드래그로 조정한 커스텀 포지션(선택)
   if (!u.pvpSquad) {
     u.pvpSquad = {
       formation: u.squad.formation,
@@ -95,11 +96,13 @@ function normalizeUser(u) {
       captain: null,
       viceCaptain: null,
       roles: {},
+      slotCoords: null,
     };
   }
   if (u.pvpSquad.captain === undefined) u.pvpSquad.captain = null;
   if (u.pvpSquad.viceCaptain === undefined) u.pvpSquad.viceCaptain = null;
   if (!u.pvpSquad.roles || typeof u.pvpSquad.roles !== 'object') u.pvpSquad.roles = {};
+  if (u.pvpSquad.slotCoords === undefined) u.pvpSquad.slotCoords = null;
 
   if (!u.playerStats || typeof u.playerStats !== 'object') u.playerStats = {}; // id -> {goals, assists}
   if (!u.devotion || typeof u.devotion !== 'object') u.devotion = {}; // id -> 0..100 (헌신도)
