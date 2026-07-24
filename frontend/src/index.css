@@ -884,14 +884,6 @@ input:focus, select:focus { border-color: var(--blue); }
   0%, 100% { opacity: 1; } 50% { opacity: .25; }
 }
 
-/* ===== rank sub-tabs / 득점왕·도움왕 ===== */
-.sub-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
-.sub-tabs button {
-  background: none; border: none; color: var(--dim);
-  padding: 8px 14px; font-size: 13px; font-weight: 700;
-  border-bottom: 2px solid transparent;
-}
-.sub-tabs button.active { color: var(--text); border-bottom-color: var(--blue); }
 .top-performers { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .perf-card {
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
