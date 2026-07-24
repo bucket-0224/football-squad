@@ -16,6 +16,10 @@ const TICK_MS = 650;
 const PAUSES_PER_SIDE = 2;
 const PAUSE_TIMEOUT_MS = 45 * 1000;
 const SUBS_PER_SIDE = 5; // EPL rule: five substitutions per match
+// 메디컬 타임아웃: auto-triggered by an injury/strop flavor event (see
+// game/simulate.js), NOT requested and NOT drawn from ctx.pauses — shorter
+// than a tactical timeout since it's forced, not a strategic break.
+const MEDICAL_TIMEOUT_MS = 25 * 1000;
 
 // [coins, points] per outcome.
 const REWARDS = {
@@ -81,6 +85,9 @@ function lineupOf(squad) {
 }
 
 // Live-squad validation for 작전 타임 changes (mirrors PUT /api/squad rules).
+// STROP_DEVOTION_THRESHOLD kept in sync with backend/index.js and
+// game/simulate.js's matching constant.
+const STROP_DEVOTION_THRESHOLD = 20;
 function validateLiveSquad(user, mode, formation, starters) {
   if (!FORMATIONS[formation]) return '알 수 없는 포메이션입니다.';
   if (!Array.isArray(starters) || starters.length !== 11) {
@@ -94,6 +101,9 @@ function validateLiveSquad(user, mode, formation, starters) {
     if (id === null) continue;
     const p = players.getPlayer(id);
     if (!p || !pool.has(id)) return '보유하지 않은 선수가 포함되어 있습니다.';
+    if ((user.devotion[id] ?? 60) < STROP_DEVOTION_THRESHOLD) {
+      return `${p.name} 선수가 태업 중이라 선발 명단에 포함할 수 없습니다.`;
+    }
     if (seen.has(id)) return '같은 선수를 두 슬롯에 배치할 수 없습니다.';
     const slotLine = LINE[slots[i]];
     if (slotLine === 'GK' && p.line !== 'GK') return '골키퍼 슬롯에는 골키퍼만 배치할 수 있습니다.';
@@ -321,9 +331,42 @@ function attach(server) {
     if (!ctx.paused) return;
     ctx.paused = false;
     ctx.pausedBy = null;
+    ctx.medical = false;
     clearTimeout(ctx.pauseTimeout);
     ctx.interval = setInterval(() => stepMatch(ctx), TICK_MS);
     socketsOf(ctx).forEach((s) => send(s, { type: 'resumed', pausesLeft: ctx.pauses }));
+  }
+
+  // Auto-triggered on an injury/strop flavor event: freezes play and forces
+  // a substitution prompt on the affected side, same shape as a requested
+  // 작전 타임 (case 'pause') but doesn't draw from ctx.pauses and can't be
+  // requested — only simulate.js's event stream causes this.
+  function triggerMedicalTimeout(ctx, side, event) {
+    if (ctx.paused) return; // already mid-stoppage; the event text alone still reached the feed
+    ctx.paused = true;
+    ctx.pausedBy = side;
+    ctx.medical = true;
+    clearInterval(ctx.interval);
+    ctx.pauseTimeout = setTimeout(() => resumeMatch(ctx), MEDICAL_TIMEOUT_MS);
+    const msgFor = (mySide) => ({
+      type: 'medical_timeout',
+      side,
+      reason: event.type, // 'injury' | 'strop'
+      player: event.player,
+      playerId: event.playerId,
+      yours: mySide === side,
+      minute: ctx.minute,
+      timeoutSec: MEDICAL_TIMEOUT_MS / 1000,
+      squad:
+        mySide === side
+          ? { formation: ctx.squads[side].formation, starters: ctx.squads[side].starters }
+          : null,
+      poolKind: ctx.mode === 'pvp' ? 'drawn' : 'owned',
+    });
+    send(ctx.home.ws, msgFor('home'));
+    send(ctx.away.ws, msgFor('away'));
+    const specMsg = msgFor('spec');
+    ctx.spectators.forEach((s) => send(s, specMsg));
   }
 
   // Live squad change: re-simulate the remainder with the new lineup and
@@ -509,6 +552,7 @@ function attach(server) {
     events.forEach((e) => {
       if (e.type === 'goal') ctx.score = e.score;
       sockets.forEach((s) => send(s, { type: 'event', event: e }));
+      if (e.type === 'injury' || e.type === 'strop') triggerMedicalTimeout(ctx, e.team, e);
     });
     sockets.forEach((s) => send(s, { type: 'tick', minute: ctx.minute, display, score: ctx.score }));
     if (ctx.minute === 45) {
@@ -519,7 +563,11 @@ function attach(server) {
     if (ctx.minute === 90) {
       sockets.forEach((s) => send(s, { type: 'phase', text: `⏱ 추가 시간 +${ctx.stoppage}분` }));
     }
-    if (ctx.minute >= 90 + ctx.stoppage) {
+    // ctx.paused guard: a medical timeout can trigger earlier in this same
+    // tick (synchronously, from the events.forEach above) — don't finish the
+    // match out from under a stoppage that was just announced to the client.
+    // stepMatch runs again once resumeMatch restarts the interval.
+    if (!ctx.paused && ctx.minute >= 90 + ctx.stoppage) {
       clearInterval(ctx.interval);
       clearTimeout(ctx.pauseTimeout);
       if (ctx.home.user) active.delete(ctx.home.user.id);

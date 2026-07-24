@@ -28,6 +28,7 @@ dynteams
   .catch((err) => console.error('[dynteams] refresh pass failed:', err));
 
 season.init();
+devotion.init();
 
 const PORT = process.env.PORT || 3000;
 const STARTING_COINS = 1500;
@@ -106,6 +107,7 @@ function sanitizeUser(u) {
     playerStats: u.playerStats || {},
     devotion: u.devotion || {},
     complaints: devotion.publicComplaints(u),
+    transferRequests: u.transferRequests || [],
     mailbox: u.mailbox || [],
     squad: u.squad,
     pvpSquad: u.pvpSquad,
@@ -187,6 +189,7 @@ app.post('/api/register', async (req, res) => {
     playerStats: {}, // id -> {goals, assists}
     devotion: {}, // id -> 0..100 (헌신도)
     complaints: [], // 여러 건 누적되는 pending 선수 불만
+    transferRequests: [], // 헌신도가 바닥난 선수의 이적 요청
     lastComplaintCheck: 0,
     // start with the best XI already placed (fit-first, GK guaranteed)
     squad: {
@@ -255,8 +258,6 @@ app.get('/api/leagueteams', (req, res) => {
 // ---- me / squad ------------------------------------------------------------
 
 app.get('/api/me', auth.authMiddleware, (req, res) => {
-  devotion.maybeRaiseComplaint(req.user);
-  store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user) });
 });
 
@@ -275,6 +276,11 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
   const drawn = new Set(req.user.drawn);
   const slots = FORMATIONS[formation];
   const seen = new Set();
+  // 태업(work-to-rule): devotion this low refuses to be selected outright —
+  // keep in sync with STROP_DEVOTION_THRESHOLD in game/simulate.js, which
+  // rolls the matching mid-match strop event for a starter already this low
+  // at kickoff (defense-in-depth in case a live squad change slips one in).
+  const STROP_DEVOTION_THRESHOLD = 20;
   for (let i = 0; i < starters.length; i++) {
     const id = starters[i];
     if (id === null) continue;
@@ -282,6 +288,9 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
     if (!p || !owned.has(id)) return bad(res, 400, '보유하지 않은 선수가 포함되어 있습니다.');
     if (isPvp && !drawn.has(id)) {
       return bad(res, 400, '실전 스쿼드에는 뽑기로 획득한 카드만 배치할 수 있습니다.');
+    }
+    if ((req.user.devotion[id] ?? 60) < STROP_DEVOTION_THRESHOLD) {
+      return bad(res, 400, `${p.name} 선수가 태업 중이라 선발 명단에 포함할 수 없습니다. (헌신도 ${req.user.devotion[id]})`);
     }
     if (seen.has(id)) return bad(res, 400, '같은 선수를 두 슬롯에 배치할 수 없습니다.');
     const slotLine = LINE[slots[i]];
@@ -555,6 +564,16 @@ app.post('/api/complaint/resolve', auth.authMiddleware, (req, res) => {
   if (r.error) return bad(res, r.status, r.error);
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user), satisfied: r.satisfied, devotion: r.devotion });
+});
+
+// ---- 이적 요청 (transfer request) ---------------------------------------------
+
+app.post('/api/transfer-request/resolve', auth.authMiddleware, (req, res) => {
+  const { requestId, choice } = req.body || {};
+  const r = devotion.resolveTransferRequest(req.user, requestId, choice);
+  if (r.error) return bad(res, r.status, r.error);
+  store.putUser(req.user);
+  res.json({ user: sanitizeUser(req.user), released: r.released, devotion: r.devotion });
 });
 
 // ---- 우편함 ------------------------------------------------------------------

@@ -219,7 +219,7 @@ function tacticOf(squad) {
 
 // --- match simulation ------------------------------------------------------
 
-function scorerFor(ratings, excludeId) {
+function scorerFor(ratings, excludeId, opts = {}) {
   const candidates = ratings.roster.filter((r) => r.slotLine !== 'GK' && r.player.id !== excludeId);
   const r = pickWeighted(candidates, (c) => {
     const lineW = c.slotLine === 'ATT' ? 3.2 : c.slotLine === 'MID' ? 1.4 : 0.35;
@@ -228,9 +228,31 @@ function scorerFor(ratings, excludeId) {
     // shooting+ovr baseline — clamped so a future role can't blow it up.
     const emphasis = ROLE_EMPHASIS[c.roleId];
     const roleShoot = Math.min(1.5, 1 + (emphasis ? emphasis.shooting : 0));
-    return lineW * roleShoot * (c.player.attrs.shooting + c.player.ovr) / 2;
+    let w = lineW * roleShoot * (c.player.attrs.shooting + c.player.ovr) / 2;
+    // corners are won in the air — tall, physical players out-jump their
+    // marker far more often than raw shooting/ovr alone would predict.
+    if (opts.aerial) {
+      const heightBonus = 1 + Math.max(0, ((c.player.height || 180) - 180) / 60);
+      const physBonus = 1 + (c.player.attrs.physical - 50) / 150;
+      w *= heightBonus * physBonus;
+    }
+    return w;
   });
   return r ? { id: r.player.id, name: r.player.name } : { id: null, name: '알 수 없는 선수' };
+}
+
+// Average height of a team's tallest 3 non-GK outfielders — a stand-in for
+// "how dangerous this team is in the air", used to bias how often corners
+// convert to goals. ~186cm baseline mirrors a typical XI's 2 CBs + a striker.
+const AERIAL_BASELINE_CM = 186;
+function aerialStrength(ratings) {
+  const heights = ratings.roster
+    .filter((r) => r.slotLine !== 'GK')
+    .map((r) => r.player.height || 180)
+    .sort((a, b) => b - a)
+    .slice(0, 3);
+  if (!heights.length) return AERIAL_BASELINE_CM;
+  return heights.reduce((s, h) => s + h, 0) / heights.length;
 }
 
 // Pick a teammate (excluding the scorer) to credit with the assist, weighted
@@ -362,6 +384,48 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   addFlavor('home', home, away.GK, xgHome);
   addFlavor('away', away, home.GK, xgAway);
 
+  // 부상(injury) / 태업(work-to-rule strop): low-probability, independent of
+  // attacking output — at most one of each per side per match. Reuses the
+  // same ".off" unavailability mechanism as a red card downstream (backend
+  // just emits the event; matchmaking.js/liveMatchEngine.ts do the rest).
+  // STROP_DEVOTION_THRESHOLD mirrors backend/index.js and matchmaking.js.
+  const INJURY_CHANCE = 0.08;
+  const STROP_CHANCE = 0.25;
+  const STROP_DEVOTION_THRESHOLD = 20;
+  const addUnavailability = (side, ratings, squad) => {
+    const outfield = ratings.roster.filter((r) => r.slotLine !== 'GK');
+    if (!outfield.length || !frac) return;
+    const randMinute = () => fromMinute + 1 + Math.floor(Math.random() * Math.max(1, 90 - fromMinute));
+
+    if (Math.random() < INJURY_CHANCE * frac) {
+      const victim = outfield[Math.floor(Math.random() * outfield.length)].player;
+      events.push({
+        minute: randMinute(),
+        type: 'injury',
+        team: side,
+        player: victim.name,
+        playerId: victim.id,
+        text: `🚑 ${victim.name}, 부상으로 그라운드에 쓰러집니다`,
+      });
+    }
+
+    const devotionMap = (squad && squad.devotion) || {};
+    const stropCandidates = outfield.filter((r) => (devotionMap[r.player.id] ?? 60) < STROP_DEVOTION_THRESHOLD);
+    if (stropCandidates.length && Math.random() < STROP_CHANCE * frac) {
+      const victim = stropCandidates[Math.floor(Math.random() * stropCandidates.length)].player;
+      events.push({
+        minute: randMinute(),
+        type: 'strop',
+        team: side,
+        player: victim.name,
+        playerId: victim.id,
+        text: `😤 ${victim.name}, 불만을 참지 못하고 경기를 거부합니다 — 태업!`,
+      });
+    }
+  };
+  addUnavailability('home', home, homeSquad);
+  addUnavailability('away', away, awaySquad);
+
   // 경고 누적 퇴장: walk the bookings chronologically; a repeat offender's
   // second yellow becomes a red (at most one per side). A sending-off tilts
   // the remaining expected goals: 10 men score less, concede more.
@@ -429,17 +493,27 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   };
 
   const addGoals = (count, side, ratings) => {
+    // corner share scales with the team's aerial strength (tallest-3 outfield
+    // avg vs a ~186cm baseline, ±1%/cm) so tall/physical XIs actually convert
+    // more corners, clamped to a realistic 5-16% band around the ~10% base —
+    // this models "share of goals originating from a corner", not the much
+    // lower raw corner-to-shot conversion rate (a different, smaller stat).
+    const cornerShare = clamp(0.1 * (1 + (aerialStrength(ratings) - AERIAL_BASELINE_CM) / 100), 0.05, 0.16);
     uniqueMinutes(count, fromMinute + 1).forEach((minute) => {
       // set-piece share tuned to EPL rates: ~12% of goals are penalties,
       // ~6% direct free kicks; the rest are worked through open play
       const r = Math.random();
-      const via = r < 0.12 ? 'penalty' : r < 0.18 ? 'freekick' : null;
+      const via = r < 0.12 ? 'penalty' : r < 0.18 ? 'freekick' : r < 0.18 + cornerShare ? 'corner' : null;
       const excludeId = excludeAt(side, minute);
-      const scorer = scorerFor(ratings, excludeId);
-      // penalties are one-on-one — no assist; open play/free kicks usually
-      // do (~75%), matching a Poisson-flavored "most goals are assisted" feel
+      const scorer = scorerFor(ratings, excludeId, { aerial: via === 'corner' });
+      // penalties are one-on-one — no assist; corners are always credited to
+      // whoever delivered the ball in; open play/free kicks usually do (~75%)
       const assist =
-        via !== 'penalty' && Math.random() < 0.75 ? assistFor(ratings, scorer.id, excludeId) : null;
+        via === 'penalty'
+          ? null
+          : via === 'corner' || Math.random() < 0.75
+          ? assistFor(ratings, scorer.id, excludeId)
+          : null;
       events.push({
         minute,
         type: 'goal',
@@ -498,7 +572,8 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     let text = e.text;
     if (e.type === 'goal') {
       const scorerTeam = e.team === 'home' ? homeName : awayName;
-      const suffix = e.via === 'penalty' ? ' (페널티킥)' : e.via === 'freekick' ? ' (프리킥)' : '';
+      const suffix =
+        e.via === 'penalty' ? ' (페널티킥)' : e.via === 'freekick' ? ' (프리킥)' : e.via === 'corner' ? ' (코너킥)' : '';
       const assistText = e.assist ? ` (어시스트: ${e.assist})` : '';
       text = `⚽ ${e.player} 골!${suffix}${assistText} (${scorerTeam})`;
     }

@@ -64,6 +64,10 @@ interface AppState {
     complaintId: string,
     choiceId: string
   ) => Promise<{ satisfied: boolean; devotion: number }>;
+  resolveTransferRequest: (
+    requestId: string,
+    choice: 'keep' | 'release'
+  ) => Promise<{ released: boolean; devotion?: number }>;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
@@ -207,5 +211,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     );
     set({ me: r.user });
     return { satisfied: r.satisfied, devotion: r.devotion };
+  },
+
+  resolveTransferRequest: async (requestId, choice) => {
+    const r = await api.post<{ user: User; released: boolean; devotion?: number }>(
+      '/api/transfer-request/resolve',
+      { requestId, choice }
+    );
+    set({ me: r.user });
+    return { released: r.released, devotion: r.devotion };
   },
 }));

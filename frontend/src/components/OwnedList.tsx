@@ -15,7 +15,13 @@ const SORTERS: Record<SortKey, (a: CatalogPlayer, b: CatalogPlayer) => number> =
   price: (a, b) => (b.price || 0) - (a.price || 0),
 };
 
-export default function OwnedList({ onEnhance }: { onEnhance: (playerId: string) => void }) {
+export default function OwnedList({
+  onEnhance,
+  onDetail,
+}: {
+  onEnhance: (playerId: string) => void;
+  onDetail: (playerId: string) => void;
+}) {
   const { me, squadMode, catalog, sellPlayer } = useAppStore();
   const [q, setQ] = useState('');
   const [lineFilter, setLineFilter] = useState('');
@@ -91,6 +97,9 @@ export default function OwnedList({ onEnhance }: { onEnhance: (playerId: string)
               <div className="card-cell" key={p.id}>
                 <PlayerCard player={p} size="sm" flag={isStarter ? '선발' : undefined} />
                 <div className="cc-actions">
+                  <button type="button" className="btn ghost small" onClick={() => onDetail(p.id)}>
+                    ⓘ 상세
+                  </button>
                   <button type="button" className="btn ghost small" onClick={() => onEnhance(p.id)}>
                     ⚡{lvl ? `+${lvl}` : '강화'}
                   </button>

@@ -8,6 +8,7 @@ import OwnedList from '../OwnedList';
 import PickerModal from '../PickerModal';
 import EnhanceModal from '../EnhanceModal';
 import ClubChangeModal from '../ClubChangeModal';
+import PlayerDetailModal from '../PlayerDetailModal';
 import type { CatalogPlayer, Ratings, Role, Squad } from '../../types';
 
 function RatingsBar({ ratings }: { ratings: Ratings }) {
@@ -109,6 +110,7 @@ export default function SquadTab() {
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
   const [enhanceId, setEnhanceId] = useState<string | null>(null);
   const [clubChangeOpen, setClubChangeOpen] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   if (!me || !bootstrap) return null;
 
@@ -242,28 +244,38 @@ export default function SquadTab() {
               const badge = id && id === squad.captain ? 'C' : id && id === squad.viceCaptain ? 'VC' : undefined;
               const [x, y] = coords[i] || [50, 50];
               return (
-                <button
-                  key={i}
-                  type="button"
-                  className="slot"
-                  style={{ left: x + '%', bottom: y + '%' }}
-                  onClick={() => setPickerSlot(i)}
-                >
-                  {p ? <PlayerCard player={convertedCard(p, pos)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
-                </button>
+                <div key={i} className="slot" style={{ left: x + '%', bottom: y + '%' }}>
+                  <button type="button" className="slot-assign" onClick={() => setPickerSlot(i)}>
+                    {p ? <PlayerCard player={convertedCard(p, pos)} size="xs" badge={badge} /> : <EmptySlotCard pos={pos} />}
+                  </button>
+                  {p && (
+                    <button
+                      type="button"
+                      className="slot-info"
+                      title="선수 정보"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDetailId(p.id);
+                      }}
+                    >
+                      ⓘ
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
           <RatingsBar ratings={ratings} />
           <RolePicker squad={squad} catalog={catalog} roles={bootstrap.roles} />
         </div>
-        <OwnedList onEnhance={setEnhanceId} />
+        <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} />
       </div>
       {pickerSlot !== null && (
         <PickerModal slotIndex={pickerSlot} pos={slots[pickerSlot]} onClose={() => setPickerSlot(null)} />
       )}
       {enhanceId && <EnhanceModal playerId={enhanceId} onClose={() => setEnhanceId(null)} />}
       {clubChangeOpen && <ClubChangeModal onClose={() => setClubChangeOpen(false)} />}
+      {detailId && <PlayerDetailModal playerId={detailId} onClose={() => setDetailId(null)} />}
     </div>
   );
 }

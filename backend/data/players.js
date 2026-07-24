@@ -70,11 +70,33 @@ function buildAttributes(name, pos, ovr) {
   return out;
 }
 
+// Average height (cm) per position group — keepers/centre-backs/strikers
+// trend tallest, wide/attacking players trend shortest, roughly matching
+// real-world positional height distributions.
+const HEIGHT_BASE = {
+  GK: 191, CB: 188, LB: 176, RB: 176, LWB: 177, RWB: 177,
+  CDM: 182, CM: 180, CAM: 176, LM: 174, RM: 174,
+  LW: 174, RW: 174, CF: 183, ST: 184,
+};
+
+// Deterministic height/weight/leadership, same stable-jitter approach as
+// buildAttributes — salts 101/102/103 keep them independent of the six core
+// attribute rolls (which use salts 1-6) and of each other.
+function buildPhysical(name, pos) {
+  const base = HEIGHT_BASE[pos] || HEIGHT_BASE.CM;
+  const height = Math.round(base + (seededRand(name + pos, 101) * 14 - 7)); // ±7cm
+  // athletic-build heuristic tied to height, not just a free-floating roll
+  const weight = Math.round((height - 100) * 0.92 + (seededRand(name + pos, 102) * 10 - 4)); // -4..+6
+  const leadership = seededRand(name + pos, 103) < 0.12; // ~12% of players
+  return { height, weight, leadership };
+}
+
 let AUTO_ID = 1;
 
 function makePlayer(row, teamName, enhanced) {
   const [name, pos, ovr] = row;
   const attrs = buildAttributes(name, pos, ovr);
+  const { height, weight, leadership } = buildPhysical(name, pos);
   return {
     id: 'p' + AUTO_ID++,
     name,
@@ -84,6 +106,9 @@ function makePlayer(row, teamName, enhanced) {
     enhanced: !!enhanced,
     team: teamName || null,
     attrs,
+    height,
+    weight,
+    leadership,
   };
 }
 

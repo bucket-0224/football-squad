@@ -2,15 +2,18 @@ import { useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import MailboxModal from './MailboxModal';
 import ComplaintsModal from './ComplaintsModal';
+import TransferRequestModal from './TransferRequestModal';
 
 export default function Header() {
   const { me, logout } = useAppStore();
   const [mailOpen, setMailOpen] = useState(false);
   const [complaintsOpen, setComplaintsOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   if (!me) return null;
 
   const unclaimed = (me.mailbox || []).filter((m) => !m.claimed).length;
   const pendingComplaints = (me.complaints || []).length;
+  const pendingTransferRequests = (me.transferRequests || []).length;
 
   return (
     <header id="topbar">
@@ -27,12 +30,16 @@ export default function Header() {
         <button type="button" className="btn ghost small mailbox-btn" onClick={() => setComplaintsOpen(true)}>
           😠 <span className={'mailbox-badge' + (pendingComplaints ? '' : ' hidden')}>{pendingComplaints}</span>
         </button>
+        <button type="button" className="btn ghost small mailbox-btn" onClick={() => setTransferOpen(true)}>
+          ✈️ <span className={'mailbox-badge' + (pendingTransferRequests ? '' : ' hidden')}>{pendingTransferRequests}</span>
+        </button>
         <button type="button" className="btn ghost small" onClick={logout}>
           로그아웃
         </button>
       </div>
       {mailOpen && <MailboxModal onClose={() => setMailOpen(false)} />}
       {complaintsOpen && <ComplaintsModal onClose={() => setComplaintsOpen(false)} />}
+      {transferOpen && <TransferRequestModal onClose={() => setTransferOpen(false)} />}
     </header>
   );
 }

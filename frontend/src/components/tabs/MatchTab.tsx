@@ -146,6 +146,27 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           }
           break;
         }
+        case 'medical_timeout': {
+          const isStrop = msg.reason === 'strop';
+          const label = isStrop ? '태업' : '부상';
+          setPauseDisabled(true);
+          setPauseStatus(
+            msg.yours
+              ? `🚑 ${msg.player} — ${label}! 최대 ${msg.timeoutSec}초 안에 교체하세요`
+              : `상대팀 ${label} 처리 중…`
+          );
+          engine.setPaused(true);
+          if (msg.yours && msg.squad) {
+            const squad = msg.squad as { formation: string; starters: (string | null)[] };
+            setPauseFormation(squad.formation);
+            setPauseStarters([...squad.starters]);
+            setPoolKind((msg.poolKind as 'owned' | 'drawn') || 'owned');
+            const injuredIdx = squad.starters.findIndex((id) => id === msg.playerId);
+            setPauseSel(injuredIdx >= 0 ? injuredIdx : null);
+            setPausePanelOpen(true);
+          }
+          break;
+        }
         case 'resumed': {
           engine.setPaused(false);
           setPausePanelOpen(false);

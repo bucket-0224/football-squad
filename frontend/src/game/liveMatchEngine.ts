@@ -791,17 +791,78 @@ export class LiveMatchEngine {
         });
       }
       this.push(outX, outY, 260, { onDone: feed });
-      this.push(outX + (Math.random() * 80 - 40), outY < VIZ.H / 2 ? VIZ.M + 55 : VIZ.H - VIZ.M - 55, 300, {
+      const landX = outX + (Math.random() * 80 - 40);
+      const landY = outY < VIZ.H / 2 ? VIZ.M + 55 : VIZ.H - VIZ.M - 55;
+      this.push(landX, landY, 300, {
         wait: 0.4,
         holdFor: thrower,
         onDone: () => {
           this.runner = null;
           this.comCd = 0;
           this.say(`${this.name(thrower)}, 스로인으로 연결`);
-          this.takeover(e.team, this.nearest(e.team, this.ball.x, this.ball.y));
+
+          // both sides converge on the landing spot and contest it, weighted
+          // by physical/defending with a moderate retention edge for the
+          // throwing side (real throw-ins are usually kept in) — instead of
+          // handing possession to the thrower deterministically.
+          const nearestN = (side: Side, n: number, exclude: (Sprite | null)[]) =>
+            this.team(side)
+              .filter((p) => !p.gk && !p.off && !exclude.includes(p))
+              .sort(
+                (a, b2) =>
+                  (a.x - landX) ** 2 + (a.y - landY) ** 2 - ((b2.x - landX) ** 2 + (b2.y - landY) ** 2)
+              )
+              .slice(0, n);
+          const contestants = [...nearestN(e.team, 2, [thrower]), ...nearestN(oppSide, 2, [deflector])];
+          contestants.forEach((p) => {
+            this.push(landX + (Math.random() * 30 - 15), landY + (Math.random() * 30 - 15), 220, { track: p });
+          });
+
+          const weight = (p: Sprite) => {
+            const w = (p.defMul || 1) * 0.55 + (p.paceMul || 1) * 0.45;
+            return (p.isHome ? 'home' : 'away') === e.team ? w * 1.5 : w;
+          };
+          const pool = [thrower, ...contestants].filter((p): p is Sprite => !!p);
+          const fallback = thrower || this.team(e.team)[1] || this.team(e.team)[0];
+          let winner: Sprite = fallback;
+          if (pool.length) {
+            const total = pool.reduce((s, p) => s + weight(p), 0);
+            let r = Math.random() * total;
+            winner = pool[pool.length - 1];
+            for (const p of pool) {
+              r -= weight(p);
+              if (r <= 0) {
+                winner = p;
+                break;
+              }
+            }
+          }
+          const winnerSide: Side = winner.isHome ? 'home' : 'away';
+          if (winnerSide !== e.team) {
+            this.comCd = 0;
+            this.say(`${this.name(winner)}, 스로인 경합에서 볼을 따냅니다!`);
+          }
+          this.takeover(winnerSide, winner);
           this.passTimer = 0.5;
         },
       });
+      return;
+    }
+
+    if (e.type === 'injury' || e.type === 'strop') {
+      // reuses the exact ".off" unavailability mechanism a red card uses:
+      // matched by short name label (sprites don't carry a playerId), the
+      // 14 existing "!p.off" filters elsewhere then keep them out of play.
+      feed();
+      const short = vizShortName(e.player);
+      const dot = this.team(e.team).find((pl) => !pl.off && !pl.gk && pl.label === short);
+      if (dot) {
+        dot.off = true;
+        if (this.carrier === dot) this.carrier = null;
+        if (this.runner === dot) this.runner = null;
+      }
+      const label = e.type === 'injury' ? '부상' : '태업';
+      this.banner(`🚑 ${label} — ${e.player}`, e.type === 'injury' ? 'red' : 'yellow', 2600);
       return;
     }
 
@@ -857,6 +918,23 @@ export class LiveMatchEngine {
         .slice(0, 3);
       this.push(this.ball.x, this.ball.y, 1, {
         wait: 1.4,
+        onDone: () => {
+          this.runner = null;
+        },
+      });
+    } else if (e.via === 'corner') {
+      // deliver from the flag into the box, then fall through to the
+      // 'goal'/'save'/'miss' switch below for the actual header finish —
+      // same shape as the non-scoring corner choreography in case 'corner'.
+      atk.ceremony = true;
+      this.carrier = null;
+      const cy = this.ball.y < VIZ.H / 2 ? VIZ.M : VIZ.H - VIZ.M;
+      this.runner = shooter;
+      atk.taker = shooter;
+      this.push(gx - dir * 60, cy, 300, { wait: 0.5 });
+      this.push(gx - dir * 60, gy + (Math.random() * 60 - 30), 430, {
+        wait: 0.5,
+        holdFor: shooter,
         onDone: () => {
           this.runner = null;
         },
@@ -1041,11 +1119,31 @@ export class LiveMatchEngine {
               this.say('숏코너 — 짧게 전개합니다');
             },
           });
-          this.push(gx - dir * 60, gy + (Math.random() * 60 - 30), 430, {
-            wait: 0.35,
-            holdFor: support,
-            onDone: resolveDelivery,
-          });
+          // "박스 선수가 달려나와서 받아서 크로스나 돌파" — the receiver either
+          // whips a first-time cross in or carries it themselves, weighted by
+          // their passing vs dribbling instead of always crossing.
+          const dribWeight = support.dribMul || 1;
+          const crossWeight = support.passMul || 1;
+          if (Math.random() * (dribWeight + crossWeight) < dribWeight) {
+            this.push(gx - dir * 24, gy + (Math.random() * 40 - 20), 330, {
+              wait: 0.4,
+              holdFor: support,
+              onDone: () => {
+                this.comCd = 0;
+                this.say(`${this.name(support)}, 직접 몰고 들어갑니다 — 돌파 시도!`);
+              },
+            });
+            this.push(gx + dir * 4, gy + (Math.random() * 30 - 15), 380, {
+              wait: 0.35,
+              onDone: resolveDelivery,
+            });
+          } else {
+            this.push(gx - dir * 60, gy + (Math.random() * 60 - 30), 430, {
+              wait: 0.35,
+              holdFor: support,
+              onDone: resolveDelivery,
+            });
+          }
         } else {
           this.push(gx - dir * 60, gy + (Math.random() * 60 - 30), 430, {
             wait: 0.9,
@@ -1308,6 +1406,10 @@ export class LiveMatchEngine {
               this.passTimer -= dt * 1.3 * atk.hurry;
               if (this.passTimer <= 0) this.schedulePass();
             }
+          } else if (atk.e.via === 'corner') {
+            // scoring corner: skip the open-play dribble-advance entirely and
+            // let shoot()'s via==='corner' staging drive straight to the flag.
+            this.shoot(atk);
           } else if (atk.e.type === 'corner') {
             if (gDist < 320 || atk.timeLeft <= -6) this.shoot(atk);
             else {
@@ -1475,7 +1577,11 @@ export class LiveMatchEngine {
         if (Math.abs(pgx - tx) < 128 && Math.abs(ty - H / 2) < 112) {
           tx = pgx - pdir * (132 + Math.abs(p.depthOff || 0) * 0.3);
         }
-      } else if (setPiece && this.attack!.e.type === 'corner' && p !== this.attack!.taker) {
+      } else if (
+        setPiece &&
+        (this.attack!.e.type === 'corner' || this.attack!.e.via === 'corner') &&
+        p !== this.attack!.taker
+      ) {
         const ce = this.attack!.e;
         const cgx = this.goalX(ce.team);
         const cdir = ce.team === 'home' ? 1 : -1;

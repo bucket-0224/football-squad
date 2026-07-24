@@ -43,6 +43,12 @@ export interface Complaint {
   choices: ComplaintChoice[];
 }
 
+export interface TransferRequest {
+  id: string;
+  playerId: string;
+  createdAt: number;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -57,6 +63,7 @@ export interface User {
   playerStats: Record<string, { goals: number; assists: number }>;
   devotion: Record<string, number>;
   complaints: Complaint[];
+  transferRequests: TransferRequest[];
   mailbox: MailItem[];
   squad: Squad;
   pvpSquad: Squad;
@@ -109,6 +116,9 @@ export interface CatalogPlayer {
   up?: number;
   attrs?: PlayerAttrs;
   youth?: boolean;
+  height?: number; // cm
+  weight?: number; // kg
+  leadership?: boolean;
 }
 
 export interface Bootstrap {

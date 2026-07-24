@@ -1,5 +1,7 @@
 'use strict';
 
+const store = require('./store');
+
 // Player 불만(complaint) -> 대화 선택 -> 헌신도(devotion) system.
 // Each issue has one "satisfying" choice (bigger devotion gain) and one or
 // two lesser/neutral choices, so how the user responds actually matters.
@@ -41,11 +43,11 @@ function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-// Opportunistically roll a new complaint. Called on the frequently-polled
-// /api/me route instead of running a dedicated timer. Complaints stack (a
-// player raising one doesn't block another from doing the same) so the user
-// clears them individually from a notification list instead of a single
-// blocking popup.
+// Opportunistically roll a new complaint for one user. Driven by the cron
+// sweep below rather than request traffic, so complaints accrue whether or
+// not the user is logged in. Complaints stack (a player raising one doesn't
+// block another from doing the same) so the user clears them individually
+// from a notification list instead of a single blocking popup.
 function maybeRaiseComplaint(user) {
   if (user.complaints.length >= MAX_PENDING) return;
   const now = Date.now();
@@ -100,4 +102,80 @@ function resolveComplaint(user, complaintId, choiceId) {
   return { satisfied: !!choice.satisfies, devotion: user.devotion[playerId] };
 }
 
-module.exports = { maybeRaiseComplaint, publicComplaints, resolveComplaint };
+const SWEEP_INTERVAL_MS = 10 * 60 * 1000; // finer than CHECK_COOLDOWN_MS so the per-user cooldown, not tick granularity, governs odds
+
+// ---------------------------------------------------------------------------
+// 이적 요청 (transfer request): a player whose devotion has cratered asks to
+// leave outright, offering a binary choice — no gradual dialogue like
+// complaints, since by this point goodwill is already gone.
+// ---------------------------------------------------------------------------
+const TRANSFER_REQUEST_DEVOTION_THRESHOLD = 15;
+const TRANSFER_REQUEST_CHANCE = 0.05; // per critically-low player per sweep tick
+
+function maybeRaiseTransferRequest(user) {
+  if (!Array.isArray(user.owned) || !user.owned.length) return;
+  if (!user.transferRequests) user.transferRequests = [];
+  const pending = new Set(user.transferRequests.map((r) => r.playerId));
+  const candidates = user.owned.filter(
+    (id) => (user.devotion[id] ?? 60) < TRANSFER_REQUEST_DEVOTION_THRESHOLD && !pending.has(id)
+  );
+  if (!candidates.length || Math.random() >= TRANSFER_REQUEST_CHANCE) return;
+  const playerId = candidates[Math.floor(Math.random() * candidates.length)];
+  user.transferRequests.push({
+    id: 't' + Math.random().toString(36).slice(2, 10),
+    playerId,
+    createdAt: Date.now(),
+  });
+}
+
+// 'keep' (잔류): devotion resets to a moderate baseline, request cleared.
+// 'release' (이적 허용): player leaves outright — no coin compensation, a
+// clean release, mirrors /api/market/sell's roster/slot-vacating logic minus
+// the payout.
+function resolveTransferRequest(user, requestId, choice) {
+  const list = user.transferRequests || [];
+  const idx = list.findIndex((r) => r.id === requestId);
+  if (idx === -1) return { error: '해당 이적 요청을 찾을 수 없습니다.', status: 400 };
+  const playerId = list[idx].playerId;
+  if (choice === 'keep') {
+    user.devotion[playerId] = 50;
+    list.splice(idx, 1);
+    return { released: false, devotion: 50 };
+  }
+  if (choice === 'release') {
+    user.owned = user.owned.filter((id) => id !== playerId);
+    user.drawn = user.drawn.filter((id) => id !== playerId);
+    if (user.upgrades) delete user.upgrades[playerId];
+    user.squad.starters = user.squad.starters.map((id) => (id === playerId ? null : id));
+    user.pvpSquad.starters = user.pvpSquad.starters.map((id) => (id === playerId ? null : id));
+    delete user.playerStats[playerId];
+    delete user.devotion[playerId];
+    user.complaints = (user.complaints || []).filter((c) => c.playerId !== playerId);
+    list.splice(idx, 1);
+    return { released: true };
+  }
+  return { error: '알 수 없는 선택입니다.', status: 400 };
+}
+
+// Real cron sweep (mirrors season.js's init/setInterval shape) over every
+// user in the store, independent of anyone polling /api/me.
+function sweep() {
+  for (const user of store.allUsers()) {
+    maybeRaiseComplaint(user);
+    maybeRaiseTransferRequest(user);
+    store.putUser(user);
+  }
+}
+
+function init() {
+  setInterval(sweep, SWEEP_INTERVAL_MS);
+}
+
+module.exports = {
+  init,
+  sweep,
+  maybeRaiseComplaint,
+  publicComplaints,
+  resolveComplaint,
+  resolveTransferRequest,
+};

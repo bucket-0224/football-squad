@@ -171,9 +171,18 @@ input:focus, select:focus { border-color: var(--blue); }
 
 .slot {
   position: absolute; transform: translate(-50%, 20%);
-  background: none; border: none; padding: 0; color: inherit;
+}
+.slot-assign {
+  display: block; background: none; border: none; padding: 0; color: inherit; cursor: pointer; width: 100%;
 }
 .slot:hover .fut-card { filter: brightness(1.12); }
+.slot-info {
+  position: absolute; top: -4px; right: -4px; z-index: 5;
+  width: 18px; height: 18px; border-radius: 50%; padding: 0;
+  background: rgba(20, 20, 30, .85); border: 1px solid rgba(255,255,255,.4);
+  color: #fff; font-size: 11px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* ===== FUT-style player cards (portrait, 세로:가로 ≈ 1.5:1) ===== */
 .fut-card {
@@ -582,7 +591,7 @@ input:focus, select:focus { border-color: var(--blue); }
 .mail-item.claimed { opacity: .55; }
 #mail-list:empty::after { content: '받은 우편이 없습니다.'; color: var(--dim); font-size: 13px; }
 
-#picker-overlay, #club-overlay, #mail-overlay, #oppo-overlay, #complaints-overlay {
+#picker-overlay, #club-overlay, #mail-overlay, #oppo-overlay, #complaints-overlay, #transfer-requests-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: center; justify-content: center; z-index: 50; padding: 16px;
 }
@@ -606,7 +615,7 @@ input:focus, select:focus { border-color: var(--blue); }
 .fit-bad { color: var(--red); }
 
 /* ===== transfer negotiation / complaint modal ===== */
-#nego-overlay, #complaint-overlay {
+#nego-overlay, #complaint-overlay, #player-detail-overlay, #transfer-request-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: center; justify-content: center; z-index: 60; padding: 16px;
 }
@@ -761,6 +770,23 @@ input:focus, select:focus { border-color: var(--blue); }
 #complaint-prompt { font-weight: 700; }
 #complaint-choices { display: flex; flex-direction: column; gap: 8px; }
 #complaint-card-col { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+
+/* ===== 이적 요청 모달 ===== */
+#transfer-request-prompt { font-weight: 700; }
+#transfer-request-choices { display: flex; flex-direction: column; gap: 8px; }
+#transfer-request-card-col { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+
+/* ===== 선수 상세 모달 ===== */
+#detail-card-col { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+.detail-physical { display: flex; flex-wrap: wrap; gap: 10px; font-size: 13px; }
+.detail-leader { color: var(--gold); font-weight: 700; }
+.detail-devotion { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.devotion-bar {
+  flex: 1; height: 8px; border-radius: 999px; background: var(--panel2);
+  border: 1px solid var(--border); overflow: hidden;
+}
+.devotion-fill { height: 100%; background: var(--green); }
+.detail-complaint { display: flex; flex-direction: column; gap: 8px; }
 
 /* ===== 선수 유형 (FM 스타일 역할) ===== */
 .role-picker { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
