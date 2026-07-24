@@ -20,5 +20,13 @@ cd ..
 
 command -v pm2 >/dev/null 2>&1 || npm install -g pm2
 
-pm2 startOrReload ecosystem.config.js --update-env
+# `pm2 reload`/`startOrReload` only refreshes env vars on an already-running
+# process — it does NOT re-read structural fields like `script` or `cwd`
+# from a changed ecosystem.config.js, so a script rename (as happened when
+# the frontend switched from server.js to server.cjs) silently keeps running
+# the stale path until the process is fully deleted and restarted. Always
+# tearing down and recreating avoids that whole class of bug; this app has
+# no traffic volume where reload's zero-downtime restart actually matters.
+pm2 delete ecosystem.config.js >/dev/null 2>&1 || true
+pm2 start ecosystem.config.js --update-env
 pm2 save
