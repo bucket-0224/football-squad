@@ -20,6 +20,7 @@ const MIME = {
   '.jpeg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.webmanifest': 'application/manifest+json',
 };
 
 // Player/team images never change in place (a new player only ever adds a

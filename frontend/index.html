@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d1117" />
+    <!-- iOS Safari는 web manifest의 상당수를 무시하므로 홈 화면 추가(웹클립)
+         동작을 위한 애플 전용 메타/아이콘을 별도로 지정해야 한다. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="풋볼 스쿼드" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <title>풋볼 스쿼드</title>
   </head>
   <body>
