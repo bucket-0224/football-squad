@@ -134,17 +134,23 @@ export default function SbcChallenges() {
     setPickSlot(null);
   };
 
-  // 요청: "기존 선수의 카드 포지션에 맞는 포지션만도 필터링해서 해줘" —
-  // 실제 스쿼드 편집(PickerModal)은 자리 페널티를 감수하고 라인만 맞으면
-  // 배치를 허용하지만, SBC는 슬롯에 적힌 포지션과 카드의 pos가 정확히
-  // 일치하는 카드만 후보로 보여준다(GK 슬롯도 이 규칙에 자연히 포함됨).
+  // 요청: "LW, CB, RB, LB, CB 등등에 대한 슬롯은 해당 슬롯을 소화가 가능한
+  // ... 자원을 넣을 수 있게" — 정확히 같은 포지션 카드만 보여주면 그
+  // 정확한 포지션 카드가 없는 클럽은 슬롯을 채울 수가 없었다. 슬롯의
+  // 라인(DEF/MID/ATT/GK, 위 LINE_OF)이 같은 카드는 전부 후보로 보여주되,
+  // 그 슬롯과 정확히 같은 포지션인 카드를 목록 맨 위로 올려 실제 스쿼드
+  // 편집(PickerModal)과 같은 "정확한 포지션 우선" 정렬을 유지한다.
   const candidatesFor = (slotIdx: number) => {
     const pos = slots[slotIdx];
+    const line = LINE_OF[pos] || 'MID';
     const usedElsewhere = new Set(starters.filter((_, i) => i !== slotIdx).filter(Boolean) as string[]);
     return ownedCards
-      .filter((p) => p.pos === pos)
+      .filter((p) => (LINE_OF[p.pos] || 'MID') === line)
       .filter((p) => !usedElsewhere.has(p.id))
-      .sort((a, b) => b.ovr - a.ovr);
+      .sort((a, b) => {
+        const exact = (p: CatalogPlayer) => (p.pos === pos ? 1 : 0);
+        return exact(b) - exact(a) || b.ovr - a.ovr;
+      });
   };
 
   const assign = (slotIdx: number, playerId: string) => {

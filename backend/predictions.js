@@ -39,7 +39,17 @@ const LEAGUES = [
 
 const UPCOMING_TTL_MS = 10 * 60 * 1000; // refresh fixture list every 10 min
 const RESULT_TTL_MS = 5 * 60 * 1000; // poll finished games every 5 min
-const MATCH_RUNNING_MS = 105 * 60 * 1000; // don't poll results before ~FT
+const MATCH_RUNNING_MS = 105 * 60 * 1000; // don't even check for a result before ~FT
+// 요청: "경기가 안 끝났는데 예측 탭에서 끝난 걸로 처리" — 105분이 지나고
+// intHomeScore/intAwayScore가 채워져 있기만 하면(연장전/승부차기/지연으로
+// 아직 진행 중이어도 라이브 스코어는 이미 들어있다) 곧바로 종료 처리하던
+// 게 원인이었다. 이 시점부턴 strStatus로 "진짜 끝났는지"부터 확인하고,
+// 안 끝났으면 계속 live로 두고 다음 tick(RESULT_TTL_MS)에 다시 본다.
+// MATCH_FORCE_SETTLE_MS는 안전망 — 리그별로 strStatus 표기가 일관되지
+// 않아 "끝남"을 영영 못 읽는 경우에도, 연장전+승부차기+지연을 다 감안해도
+// 이 시점이면 사실상 끝났다고 보고 강제로 정산한다(fixture가 영원히
+// live에 머물러 정산이 안 되는 걸 막는 최후 보루).
+const MATCH_FORCE_SETTLE_MS = 170 * 60 * 1000;
 const HISTORY_MAX = 12;
 
 let lastUpcomingFetch = 0;
@@ -126,6 +136,16 @@ function estimateLiveMinute(wallClockMin) {
   if (wallClockMin <= 45) return wallClockMin;
   if (wallClockMin <= 45 + HALFTIME_BREAK_MIN) return 45;
   return Math.min(LIVE_MINUTE_CAP, wallClockMin - HALFTIME_BREAK_MIN);
+}
+
+// TheSportsDB의 strStatus는 리그/제공사에 따라 표기가 제각각이라
+// (예: "FT", "Match Finished", "AET", "Pen") 실제로 관측되는 "끝남" 계열
+// 표기를 폭넓게 인식한다 — 반대로 "1H"/"HT"/"2H"/분 숫자처럼 진행 중을
+// 뜻하는 값은 여기 안 걸려 false로 남는다.
+function isFinishedStatus(status) {
+  if (!status) return false;
+  const s = String(status).trim().toUpperCase();
+  return s === 'FT' || s === 'AET' || s === 'PEN' || s === 'AWARDED' || s.includes('FINISH');
 }
 
 function outcomeOf(score) {
@@ -224,6 +244,19 @@ async function resolveDue(p, now) {
     const h = Number(ev.intHomeScore);
     const a = Number(ev.intAwayScore);
     if (ev.intHomeScore == null || Number.isNaN(h) || Number.isNaN(a)) continue;
+    // 105분이 지났다고 곧바로 종료 처리하지 않는다 — 그 시점에도 스코어
+    // 필드는 이미 채워져 있지만(라이브 스코어), 연장전/승부차기/지연 등으로
+    // 아직 실제로 진행 중일 수 있다. strStatus로 진짜 종료를 확인하고,
+    // 안 끝났으면 live로 갱신만 하고 다음 tick에 다시 확인한다 — 단
+    // MATCH_FORCE_SETTLE_MS를 넘기면(리그별 상태 표기 불일치 대비 안전망)
+    // 상태와 무관하게 그냥 정산한다.
+    const finished = isFinishedStatus(ev.strStatus);
+    if (!finished && now - fx.kickoffAt < MATCH_FORCE_SETTLE_MS) {
+      fx.status = 'live';
+      fx.lastLiveFetch = now;
+      fx.live = { home: h, away: a, status: ev.strStatus || null };
+      continue;
+    }
     settle(fx, { home: h, away: a });
   }
   // move settled fixtures into the history list
@@ -232,6 +265,74 @@ async function resolveDue(p, now) {
     p.fixtures = p.fixtures.filter((f) => f.status !== 'done');
     p.resolved = [...settled, ...p.resolved].slice(0, HISTORY_MAX);
   }
+}
+
+// 관리자 전용 전수 감사: 이미 'done'으로 정산된 경기 전부를 TheSportsDB에서
+// 다시 조회해 (a) 실제로 끝났는지, (b) 기록된 스코어가 맞는지 재확인한다.
+// 배포 전 버그(105분이 지나고 스코어 필드가 채워져 있기만 하면 곧바로
+// 종료 처리 — resolveDue의 옛 로직)로 인해 실제로는 아직 진행 중이던
+// 경기가 잘못 정산됐을 수 있어, 배포 후 한 번 돌려서 바로잡기 위한 것.
+// 문제가 있는 건: 이미 지급된 보상을 회수하고(코인 차감, 0 밑으로는 안
+// 내려감), 정산 상태를 리셋해 live로 되돌린다 — 그러면 다음 tick의
+// resolveDue가 (이미 고쳐진 로직으로) 실제로 끝났을 때 다시, 이번엔
+// 올바르게 정산한다. 새 정산 로직을 여기서 중복 구현하지 않고 기존
+// 플로우에 그대로 태우는 것이 핵심.
+async function auditResolved() {
+  const p = db();
+  const report = { checked: 0, reverted: [], unchanged: [], notFound: [] };
+  const keep = [];
+  for (const fx of p.resolved) {
+    report.checked++;
+    const data = await tsdb(`lookupevent.php?id=${fx.eventId}`);
+    const ev = data && data.events && data.events[0];
+    if (!ev) {
+      report.notFound.push({ id: fx.id, label: `${fx.home} vs ${fx.away}` });
+      keep.push(fx);
+      continue;
+    }
+    const finished = isFinishedStatus(ev.strStatus);
+    const h = Number(ev.intHomeScore);
+    const a = Number(ev.intAwayScore);
+    const hasScore = ev.intHomeScore != null && !Number.isNaN(h) && !Number.isNaN(a);
+    const scoreMatches = hasScore && fx.result && fx.result.score.home === h && fx.result.score.away === a;
+
+    if (finished && scoreMatches) {
+      report.unchanged.push({ id: fx.id, label: `${fx.home} vs ${fx.away}`, apiStatus: ev.strStatus });
+      keep.push(fx);
+      continue;
+    }
+
+    const previousResult = fx.result;
+    let usersAffected = 0;
+    Object.entries(fx.bets).forEach(([userId, bet]) => {
+      if (!bet.rewarded) return;
+      const u = store.getUser(userId);
+      if (u) {
+        u.coins = Math.max(0, u.coins - (bet.reward || 0));
+        store.putUser(u);
+        usersAffected++;
+      }
+      bet.rewarded = false;
+      bet.reward = null;
+    });
+    fx.status = 'live';
+    fx.result = null;
+    fx.resolvedAt = null;
+    fx.live = hasScore ? { home: h, away: a, status: ev.strStatus || null } : fx.live || null;
+    fx.lastLiveFetch = Date.now();
+    p.fixtures.push(fx);
+    report.reverted.push({
+      id: fx.id,
+      label: `${fx.home} vs ${fx.away}`,
+      previousResult,
+      apiStatus: ev.strStatus || null,
+      apiScore: hasScore ? { home: h, away: a } : null,
+      usersAffected,
+    });
+  }
+  p.resolved = keep;
+  store.save();
+  return report;
 }
 
 // Best-effort live score/status peek for kicked-off fixtures. TheSportsDB's
@@ -387,4 +488,4 @@ function init() {
   }, TICK_INTERVAL_MS);
 }
 
-module.exports = { init, getRounds, placeBet };
+module.exports = { init, getRounds, placeBet, auditResolved };

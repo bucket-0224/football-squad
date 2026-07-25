@@ -996,6 +996,29 @@ app.post('/api/admin/warm-team', async (req, res) => {
   }
 });
 
+// 관리자 전용: 이미 정산된("done") 예측 경기를 전부 TheSportsDB에서 다시
+// 조회해 실제로 끝났는지/스코어가 맞는지 재확인하고, 틀린 건 지급된
+// 코인을 회수한 뒤 live로 되돌려 정상 플로우가 다시 정산하게 한다
+// (predictions.js의 auditResolved 참고 — resolveDue의 예전 조기-종료
+// 버그로 잘못 정산된 과거 기록을 바로잡기 위한 1회성 도구).
+//   curl -X POST $API_BASE/api/admin/predictions/audit \
+//     -H "x-admin-key: $ADMIN_KEY"
+app.post('/api/admin/predictions/audit', async (req, res) => {
+  const adminKey = process.env.ADMIN_KEY;
+  if (!adminKey) return bad(res, 503, '관리자 기능이 비활성화되어 있습니다 (ADMIN_KEY 미설정).');
+  const provided = req.headers['x-admin-key'];
+  if (!provided || !timingSafeEqual(provided, adminKey)) {
+    return bad(res, 401, '관리자 인증 실패.');
+  }
+  try {
+    const report = await predictions.auditResolved();
+    res.json(report);
+  } catch (err) {
+    console.error('[admin] predictions audit failed:', err);
+    bad(res, 500, '감사 중 오류가 발생했습니다.');
+  }
+});
+
 // ---- 시즌 --------------------------------------------------------------------
 
 app.get('/api/season', (req, res) => {
