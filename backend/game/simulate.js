@@ -141,19 +141,19 @@ const ROLE_EMPHASIS = {
   noNonsenseCB: { shooting: 0, passing: 0 },
 };
 
-// Only apply a role if it's valid for where the card is actually PLAYING
-// (the formation slot it occupies), not the card's own real position —
-// 요청: "현재 맞지 않는 포지션에 있더라도 유형 적용은 상관없이 되게 해주고
-// (공미여도 윙어면 윙어 스타일 플레이)". 예전엔 player.pos(카탈로그 상의
-// 실제 포지션)로만 검사해서, 프론트 유형 선택기(RolePicker)가 배치 기준으로
-// 옵션을 보여주더라도 실제 경기 시뮬레이션에서는 "포지션이 안 맞는다"며
-// 조용히 무시되고 매번 기본 라인 공식으로 되돌아갔었다 — 즉 화면에는
-// 골랐다고 나오는데 실제 능력치엔 반영이 안 되는 버그. slotPos(그 슬롯에
-// 배정된 포메이션 포지션 라벨, 선수 교체/스왑을 그대로 반영)를 기준으로
-// 바꿔서 프론트의 배치 기준 판정과 일치시킨다.
-function roleAwareScore(player, slotLine, slotPos, roleId) {
+// 요청 변천사: 처음엔 "현재 맞지 않는 포지션에 있더라도 유형 적용은
+// 상관없이 되게 해주고(공미여도 윙어면 윙어 스타일 플레이)"라서 player.pos
+// 대신 slotPos(그 슬롯의 포메이션 라벨)로 검사하도록 고쳤었다. 그런데 그
+// 조건 자체도 "슬롯에 안 맞는 유형"을 여전히 막고 있었고, 그게 다시
+// 부작용을 냈다("주장/부주장/전술 변경이 계속 Cherki 때문에 거부됨" — 이건
+// PUT /api/squad 쪽에서 별도로 고쳤다). 최종 요청: "선수가 원치 않는
+// 포지션이나 대표하는 포지션이 아님에도 배치가 된 경우에 원치 않는
+// 유형도 적용이 가능해야해" — 포지션/슬롯과 무관하게 고른 유형을 그대로
+// 적용한다. roleId가 있으면(=유저가 뭔가 골랐으면) 무조건 그 공식을 쓰고,
+// 없을 때만 슬롯 라인의 기본 공식으로 대체한다.
+function roleAwareScore(player, slotLine, roleId) {
   const role = roleId && ROLE_DEFS[roleId];
-  if (role && role.pos.includes(slotPos)) return role.score(player.attrs);
+  if (role) return role.score(player.attrs);
   return roleScore(player.attrs, slotLine);
 }
 
@@ -212,8 +212,10 @@ function computeRatings(squad) {
     else if (viceCaptainId && id === viceCaptainId) mult *= 1.025;
     const roleId = roleMap ? roleMap[id] : null;
     const role = roleId && ROLE_DEFS[roleId];
-    const effectiveRoleId = role && role.pos.includes(slotPos) ? roleId : defaultRoleIdFor(slotPos);
-    const score = roleAwareScore(p, slotLine, slotPos, roleId) * mult;
+    // 유형은 슬롯/포지션과 무관하게 그대로 적용한다(위 roleAwareScore 주석
+    // 참고) — 골랐으면 그 유형, 안 골랐을 때만 슬롯 기본 유형으로 대체.
+    const effectiveRoleId = role ? roleId : defaultRoleIdFor(slotPos);
+    const score = roleAwareScore(p, slotLine, roleId) * mult;
     lines[slotLine].push(score);
     roster.push({ player: p, slotPos, slotLine, chem, score, roleId: effectiveRoleId });
   });

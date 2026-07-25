@@ -73,14 +73,25 @@ export default function EventTab() {
           {formatEventEnd(activeEvent.endsAt)}까지 진행 · 열쇠로 그리드를 열어 보상을 받으세요
         </div>
       </div>
-      <div className="event-key-bar">
-        <span className="event-key-count">🔑 보유 열쇠 {grid?.keys ?? 0}개</span>
-        <button type="button" className="btn small primary" disabled={busy} onClick={() => buyKey(1)}>
-          열쇠 1개 (🪙{activeEvent.keyPrice.toLocaleString()})
-        </button>
-        <button type="button" className="btn small" disabled={busy} onClick={() => buyKey(5)}>
-          5개 (🪙{(activeEvent.keyPrice * 5).toLocaleString()})
-        </button>
+      <div className="event-key-count">🔑 보유 열쇠 {grid?.keys ?? 0}개</div>
+      {/* 요청: "열쇠 구매를 약간 아이템 컴포넌트를 재활용해서 해당 이미지를
+          삽입해줘" — 구매(PacksTab)의 팩 목록과 같은 .pack-tile 구조
+          (이미지/이름·설명·가격/버튼)를 그대로 재사용했다. */}
+      <div className="pack-tile pack-event-key">
+        <img className="pk-img" src="/img/event/key.png" alt="" />
+        <div className="pk-info">
+          <span className="pk-name">🔑 럭키 열쇠</span>
+          <span className="pk-desc">그리드 한 칸을 열 수 있는 이벤트 한정 열쇠</span>
+          <span className="pk-price">🪙 {activeEvent.keyPrice.toLocaleString()}</span>
+        </div>
+        <div className="pk-actions">
+          <button type="button" className="btn small primary" disabled={busy} onClick={() => buyKey(1)}>
+            1개 구매
+          </button>
+          <button type="button" className="btn small" disabled={busy} onClick={() => buyKey(5)}>
+            5개 🪙{(activeEvent.keyPrice * 5).toLocaleString()}
+          </button>
+        </div>
       </div>
       <div className="event-grid" style={{ gridTemplateColumns: `repeat(${activeEvent.cols}, 1fr)` }}>
         {grid?.cells.map((cell) => (

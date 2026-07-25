@@ -378,35 +378,20 @@ app.put('/api/squad', auth.authMiddleware, (req, res) => {
   }
   const nextRoles = {};
   const rolesSrc = roles !== undefined ? roles : prev.roles || {};
-  // roles가 이번 요청에 실제로 들어있을 때만(=유저가 지금 유형을 고르는
-  // 중일 때만) 엄격하게 막는다. 버그 리포트: "주장 바꾸기 혹은 부주장으로
-  // 바꾸기 혹은 포메이션 전술 바꾸기를 하면 항상... Cherki가 선택이 된
-  // 것이 아님에도 선택된 것처럼 뜨면서... 거부돼" — 원인은 이 검증이
-  // roles를 안 건드리는 저장(주장/전술 변경 등)에서도 매번 prev.roles
-  // 전체를 지금 슬롯 기준으로 재검증했던 것: 어떤 선수가 유형을 배정받은
-  // "뒤에" 다른 자리로 옮겨지면(흔한 드래그/스왑), 그 유형이 새 슬롯엔
-  // 안 맞아 저장 자체가 통째로 거부됐다 — 유저는 그 선수를 건드리지도
-  // 않았는데. slotPos 기준 검증(위 커밋)은 "유저가 실제로 이 유형을
-  // 고른 시도"에만 적용돼야지, 무관한 저장까지 막으면 안 된다. roles가
-  // 없는 저장(strict=false)에서는 안 맞는 항목을 에러 없이 조용히
-  // 빼버린다 — roleAwareScore가 이런 stale 항목을 이미 안전하게
-  // 처리하므로 저장을 막을 이유가 없다.
+  // 요청: "선수가 원치 않는 포지션이나 대표하는 포지션이 아님에도 배치가
+  // 된 경우에 원치 않는 유형도 적용이 가능해야해" — 유형은 이제 포지션/
+  // 슬롯과 완전히 무관하게 아무 선수에게나 적용할 수 있다(실제 능력치
+  // 반영은 simulate.js의 roleAwareScore가 그대로 담당, 거기도 같은
+  // 기준으로 고쳤다). roles가 이번 요청에 실제로 들어있을 때만(=유저가
+  // 지금 유형을 고르는 중일 때만) 존재하지 않는 roleId를 막고, 그 외엔
+  // 전부 허용한다. roles가 없는 저장(주장/전술 변경 등)에서는 이전 값을
+  // 그대로 유지 — 예전엔 여기서 슬롯 궁합까지 재검증해 무관한 저장까지
+  // 통째로 거부하는 버그가 있었다(별도 커밋으로 수정).
   const strict = roles !== undefined;
   for (const [pid, roleId] of Object.entries(rolesSrc || {})) {
-    const slotIdx = starters.indexOf(pid);
-    if (slotIdx < 0) continue; // stale entry for a benched player
-    const role = ROLE_DEFS[roleId];
-    if (!role) {
+    if (!starters.includes(pid)) continue; // stale entry for a benched player
+    if (!ROLE_DEFS[roleId]) {
       if (strict) return bad(res, 400, '알 수 없는 선수 유형입니다.');
-      continue;
-    }
-    const p = players.getPlayer(pid);
-    // 요청: "현재 맞지 않는 포지션에 있더라도 유형 적용은 상관없이 되게
-    // 해주고(공미여도 윙어면 윙어 스타일 플레이)" — 선수 본인의 실제
-    // 포지션(p.pos)이 아니라 지금 배치된 슬롯(slots[slotIdx])이 그 유형에
-    // 맞는지로 검사한다.
-    if (!p || !role.pos.includes(slots[slotIdx])) {
-      if (strict) return bad(res, 400, `${p ? p.name : '선수'}에게는 적용할 수 없는 유형입니다.`);
       continue;
     }
     nextRoles[pid] = roleId;

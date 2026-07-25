@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
 import { activeRatings, activeSquad, upgradedCard } from '../../game/cards';
 import { COORDS } from '../../game/formationCoords';
-import { BAND_LABEL, bandOfY, convertedCardByBand, roleMatchPos, slotPositionLabel } from '../../game/bands';
+import { BAND_LABEL, bandOfY, convertedCardByBand, slotPositionLabel } from '../../game/bands';
 import PlayerCard, { EmptySlotCard } from '../PlayerCard';
 import OwnedList from '../OwnedList';
 import PickerModal from '../PickerModal';
@@ -64,28 +64,27 @@ function RolePicker({
 }) {
   const saveSquad = useAppStore((s) => s.saveSquad);
 
-  // 요청: "선수 별 플레이스타일 지정할 때도 현재 포지션에 맞게 어떤 플레이를
-  // 할지 변경해주고 (공미여도 윙어면 윙어 스타일 플레이)" — 카드 라벨/OVR
-  // 보정(convertedCardByBand)과 완전히 같은 원칙: 유형 후보도 선수 본인의
-  // 실제 카탈로그 포지션(p.pos)이 아니라 "지금 피치 위 이 슬롯에 배치된
-  // 자리"(coords[i] 기준 roleMatchPos)로 골라야 한다. GK는 슬롯 좌표가 없어
-  // (드래그가 막혀 있음) band 5 취급이 애매하므로 카탈로그 포지션을 그대로
-  // 쓴다.
+  // 요청 변천사 최종본: "선수가 원치 않는 포지션이나 대표하는 포지션이
+  // 아님에도 배치가 된 경우에 원치 않는 유형도 적용이 가능해야해" — 처음엔
+  // 배치 자리(placedPos)에 맞는 유형만 후보로 보여줬는데, 그 필터 자체도
+  // "안 맞는 유형"을 막고 있어 요청과 어긋났다. 이제 포지션/배치와 완전히
+  // 무관하게 전체 유형(roles) 중 아무거나 고를 수 있다 — 백엔드
+  // (PUT /api/squad, simulate.js의 roleAwareScore)도 같은 기준으로 이미
+  // 고쳤으므로 여기서 고른 유형은 실제 능력치 계산에 그대로 반영된다.
+  // placedLabel(카드에 찍히는 지금 이 자리 라벨)은 정보 표시용으로만
+  // 남겨둔다 — 유형 선택 자체와는 이제 무관.
+  const allOpts = Object.entries(roles);
   const rows = squad.starters
     .map((id, i) => {
       const p = id ? catalog.get(id) : null;
       if (!p) return null;
       const coord = coords[i];
-      const placedPos = p.pos === 'GK' || !coord ? p.pos : roleMatchPos(coord[0], coord[1]);
       const placedLabel = p.pos === 'GK' || !coord ? p.pos : slotPositionLabel(coord[0], coord[1]);
-      const opts = Object.entries(roles).filter(([, r]) => r.pos.includes(placedPos));
-      if (opts.length < 2) return null;
-      let current = squad.roles?.[p.id];
-      if (!current || !opts.some(([roleId]) => roleId === current)) {
-        const def = opts.find(([, r]) => r.isDefault);
-        current = def ? def[0] : opts[0][0];
+      let current: string | undefined = squad.roles?.[p.id];
+      if (!current || !allOpts.some(([roleId]) => roleId === current)) {
+        current = undefined;
       }
-      return { p, placedLabel, opts, current };
+      return { p, placedLabel, opts: allOpts, current };
     })
     .filter((x): x is NonNullable<typeof x> => !!x);
 

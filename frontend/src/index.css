@@ -527,6 +527,13 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .fc-stats span { white-space: nowrap; }
 .fc-stats b { font-weight: 900; font-size: 11px; }
+/* 요청: "모바일 기준 득점왕 도움왕이 약간 짤려서 가독성이 이상해 보이니까"
+   — sz-sm(110px) 카드에서 3열로는 "90 PAC" 같은 한 칸이 다 안 들어가
+   white-space:nowrap 때문에 카드 바깥으로 넘쳐 잘려 보였다(RankTab의
+   득점왕/도움왕 카드가 이 크기+stats를 함께 쓰는 대표 사례). 2열로 바꿔
+   칸당 폭을 넓히고 글자도 살짝 줄였다. */
+.sz-sm .fc-stats { grid-template-columns: repeat(2, 1fr); font-size: 9px; gap: 1px 4px; }
+.sz-sm .fc-stats b { font-size: 10px; }
 
 /* card sizes (height follows from the 1:2 aspect ratio) */
 .fut-card.sz-xs { width: 56px; }
@@ -1153,10 +1160,11 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .event-banner-title { font-size: 18px; font-weight: 900; }
 .event-banner-sub { font-size: 13px; font-weight: 700; margin-top: 4px; opacity: .9; }
-.event-key-bar {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
-}
-.event-key-count { font-weight: 800; font-size: 14px; margin-right: auto; }
+.event-key-count { font-weight: 800; font-size: 14px; margin-bottom: 8px; }
+/* 요청: "열쇠 구매를 약간 아이템 컴포넌트를 재활용해서 해당 이미지를
+   삽입해줘" — 구매 탭 팩 목록의 .pack-tile을 그대로 재사용, 배경만
+   이미지 톤(짙은 금색/검정)에 맞춰 새로 잡았다. */
+.pack-event-key { background: linear-gradient(160deg, #3a2e10, #1c1608); margin-bottom: 14px; }
 /* 요청: "열쇠 바둑판을 두고, 전부 가려진 채로" — 5x5 격자, 안 연 칸은
    자물쇠만 보이다가 열면 등급(SSS~C)이 드러난다. 등급색은 기존 카드
    tier 팔레트(.tier-gold 등)와 겹치지 않는 별도 스펙트럼으로 잡아 그리드
@@ -1343,7 +1351,14 @@ input:focus, select:focus { border-color: var(--blue); }
    bottom:24px는 그보다 얕아서 z-index로 위에 그려지긴 해도 네비 위에
    "겹쳐" 보였다. 네비 높이+안전영역만큼 더 띄워서 확실히 그 위에 뜨게 한다. */
 @media (max-width: 640px) {
-  #toast { bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+  #toast {
+    bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    /* 요청(재차): "토스트를... 가로 길이를 조금 더 길게 해줘야해 (모바일
+       기준)" — 데스크톱용 min(94vw,440px)는 모바일에서 440px 상한에 걸릴
+       일이 없어(94vw가 이미 더 좁음) 사실상 94vw 그대로 적용되고 있었다 —
+       그 94vw 자체를 더 넓혀서 화면 가장자리에 더 가깝게 채운다. */
+    max-width: 97vw;
+  }
 }
 
 /* ===== 선수 강화 ===== */
