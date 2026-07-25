@@ -17,6 +17,7 @@ const season = require('./season');
 const devotion = require('./devotion');
 const mailbox = require('./mailbox');
 const account = require('./account');
+const event = require('./event');
 
 // rebuild dynamically fetched clubs so persisted player ids keep resolving,
 // then fill in team badges + re-fetch pre-v2 rosters in the background
@@ -292,6 +293,7 @@ app.get('/api/bootstrap', (req, res) => {
     packs: transfer.packList(),
     enhance: players.ENHANCE,
     ultra: { cost: players.ULTRA_COST, bonus: players.ULTRA_BONUS },
+    events: event.listEvents(),
     roles: Object.fromEntries(
       Object.entries(ROLE_DEFS).map(([id, r]) => [id, { label: r.label, pos: r.pos, isDefault: !!r.isDefault }])
     ),
@@ -587,6 +589,30 @@ app.post('/api/packs/open', auth.authMiddleware, (req, res) => {
   res.json(out);
 });
 
+// ---- 이벤트(기간 한정 열쇠 그리드) ------------------------------------------
+
+app.get('/api/event/:eventId/grid', auth.authMiddleware, (req, res) => {
+  const grid = event.publicGrid(req.user, req.params.eventId);
+  if (!grid) return bad(res, 404, '존재하지 않는 이벤트입니다.');
+  res.json({ grid });
+});
+
+app.post('/api/event/:eventId/buy-key', auth.authMiddleware, (req, res) => {
+  const r = event.buyKey(req.user, req.params.eventId, (req.body || {}).count);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ keys: r.keys, user: sanitizeUser(req.user) });
+});
+
+// 칸을 연다 — 보상은 즉시 지급되지 않고 우편함으로 간다(요청: "우편으로
+// 열면 바로 팝업이 떠서 어떤 카드, 혹은 크레딧이 받아지는지 확인"). 여기서는
+// "무슨 등급이 나왔는지"와 갱신된 그리드만 돌려주고, 실제 카드/코인 확인은
+// /api/mailbox/claim에서 이뤄진다.
+app.post('/api/event/:eventId/open-cell', auth.authMiddleware, (req, res) => {
+  const r = event.openCell(req.user, req.params.eventId, (req.body || {}).cellIndex, mailbox.sendMail);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ grade: r.grade, grid: r.grid, user: sanitizeUser(req.user) });
+});
+
 app.post('/api/market/sell', auth.authMiddleware, (req, res) => {
   const { playerId } = req.body || {};
   if (!req.user.owned.includes(playerId)) {
@@ -735,12 +761,27 @@ app.post('/api/transfer-request/resolve', auth.authMiddleware, (req, res) => {
 
 // ---- 우편함 ------------------------------------------------------------------
 
+// 요청: "우편으로 열면 바로 팝업이 떠서 어떤 카드, 혹은 크레딧이 받아지는지
+// 확인할 수 있게" — 우편에 packs가 실려 있으면(이벤트 열쇠 보상 등) claim
+// 시점에 실제로 그 팩들을 개봉해(free:true, 코인 재청구 없음) packResults로
+// 돌려준다 — 프론트가 기존 팩 개봉 결과 화면(PackRevealModal)을 그대로
+// 재사용해 "무엇을 받았는지" 보여줄 수 있게.
 app.post('/api/mailbox/claim', auth.authMiddleware, (req, res) => {
   const { mailId } = req.body || {};
   const r = mailbox.claimMail(req.user, mailId);
   if (r.error) return bad(res, r.status, r.error);
+  let packResults = null;
+  if (r.mail.packs && r.mail.packs.length) {
+    packResults = [];
+    r.mail.packs.forEach(({ id, count }) => {
+      for (let i = 0; i < count; i++) {
+        const pr = transfer.openPack(req.user, id, { free: true });
+        if (!pr.error) packResults.push(pr);
+      }
+    });
+  }
   store.putUser(req.user);
-  res.json({ user: sanitizeUser(req.user) });
+  res.json({ user: sanitizeUser(req.user), mail: r.mail, packResults });
 });
 
 function timingSafeEqual(a, b) {
@@ -762,10 +803,10 @@ app.post('/api/admin/mail', (req, res) => {
   if (!provided || !timingSafeEqual(provided, adminKey)) {
     return bad(res, 401, '관리자 인증 실패.');
   }
-  const { username, coins, message } = req.body || {};
+  const { username, coins, message, packs } = req.body || {};
   const user = username && store.findUserByName(String(username).trim());
   if (!user) return bad(res, 404, '존재하지 않는 유저입니다.');
-  const mail = mailbox.sendMail(user, { coins, message });
+  const mail = mailbox.sendMail(user, { coins, message, packs });
   store.putUser(user);
   res.json({ ok: true, mail });
 });

@@ -1,5 +1,5 @@
 export type TopTabId = 'squad' | 'shop' | 'match' | 'predict' | 'info';
-export type ShopSubTab = 'market' | 'packs';
+export type ShopSubTab = 'market' | 'packs' | 'event';
 export type InfoSubTab = 'rank' | 'news';
 
 const TOP_TABS: { id: TopTabId; label: string; icon: string }[] = [

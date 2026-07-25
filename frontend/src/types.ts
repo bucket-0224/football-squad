@@ -26,6 +26,7 @@ export interface MailItem {
   id: string;
   coins?: number;
   message?: string;
+  packs?: { id: string; count: number }[] | null;
   createdAt: number;
   claimed: boolean;
 }
@@ -138,6 +139,40 @@ export interface Bootstrap {
   enhance: { maxLevel: number; rates: number[]; costRate: number };
   ultra: { cost: number; bonus: number };
   roles: Record<string, Role>;
+  events: EventInfo[];
+}
+
+// ---- 이벤트(기간 한정 열쇠 그리드) ----
+
+export interface EventInfo {
+  id: string;
+  name: string;
+  active: boolean;
+  endsAt: number;
+  keyPrice: number;
+  rows: number;
+  cols: number;
+  cellCount: number;
+}
+
+export interface EventGridCell {
+  index: number;
+  opened: boolean;
+  grade: string | null;
+}
+
+export interface EventGrid {
+  eventId: string;
+  cells: EventGridCell[];
+  keys: number;
+}
+
+export interface PackResult {
+  pack: string;
+  player: CatalogPlayer;
+  duplicate: boolean;
+  unlocked: boolean;
+  refund: number;
 }
 
 // ---- predictions (실제 경기 예측) ----

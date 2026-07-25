@@ -739,16 +739,18 @@ input:focus, select:focus { border-color: var(--blue); }
 
 /* FM 스타일 이벤트 배너 — 요청: "시뮬레이션 필드 안에서 지금 중계 메세지가
    나와서 지금 골대 혼잡 상황에서 경기가 안 보이니까... 필드 아래에 조금
-   공간을 두고 사라지지 않고 항상 중계 메세지가 새로 갱신되도록". 예전엔
-   전술판(캔버스) 위에 겹치는 position:absolute 배너였고, 몇 초 뒤
-   페이드아웃되며 사라졌다 — 골문 앞 혼잡한 장면을 배너가 가려서 정작
-   중요한 순간을 못 보게 되는 문제. .pitch-wrap의 position:relative에서
-   의도적으로 빠져나와 캔버스 다음에 오는 일반 흐름 요소로 바꿔서, 캔버스
-   "아래"에 자기 자리를 갖게 하고(더는 겹치지 않음), 사라지는 로직 자체를
-   없애 항상 최신 메세지가 그대로 보이게 한다(showBanner의 자동 숨김
-   타이머 제거 — MatchTab.tsx 참고).*/
+   공간을 두고 사라지지 않고 항상 중계 메세지가 새로 갱신되도록" (1차) →
+   "라이브 매치 배너를 필드 위로 올리고, 아래에 경기 정지랑 필드 순서로
+   배치를 해주고" (2차) — 원래 전술판(캔버스) 위에 겹치는
+   position:absolute 배너였고 몇 초 뒤 페이드아웃되며 사라졌다(골문 앞
+   혼잡한 장면을 가려서 정작 중요한 순간을 못 보는 문제). 캔버스 겹침은
+   1차 수정에서 없앴고, 2차 요청으로 스코어보드 바로 아래 · 작전 타임
+   버튼(.pause-bar)과 필드(.match-stage)보다 위로 옮겼다 — 지금 DOM 순서는
+   스코어보드 → 이 배너 → 작전 타임 → 필드. 사라지는 로직도 없앤 채라
+   항상 최신 메세지가 그대로 보인다(showBanner의 자동 숨김 타이머 제거 —
+   MatchTab.tsx 참고). */
 #event-banner {
-  margin-top: 8px;
+  margin-bottom: 8px;
   max-width: 100%;
   padding: 8px 18px; border-radius: 999px;
   font-weight: 800; font-size: 13px; text-align: center; white-space: nowrap;
@@ -1067,6 +1069,15 @@ input:focus, select:focus { border-color: var(--blue); }
 .attempts-dots { letter-spacing: 2px; }
 
 /* ===== packs ===== */
+/* 요청: "이벤트인 만큼 카드팩 최상단에 기간제로 배너 느낌 달아주고 이벤트
+   진행 중이라고 인식되게 추가" — 눈에 띄는 그라데이션으로 상시 판매되는
+   팩 목록과 구분되는 "지금만" 느낌을 준다. */
+.event-promo-banner {
+  margin-bottom: 14px; padding: 12px 16px; border-radius: 10px;
+  background: linear-gradient(135deg, #ff7a45, #ffb45e);
+  color: #2b1400; font-weight: 800; font-size: 13px; text-align: center;
+  box-shadow: 0 4px 14px rgba(255, 122, 69, .35);
+}
 .packs-intro { margin-bottom: 16px; font-size: 14px; }
 #pack-shelf {
   /* 세로 리스트 — 각 행(팩) 안에서 이미지/텍스트/버튼이 가로로 정렬된다. */
@@ -1109,6 +1120,20 @@ input:focus, select:focus { border-color: var(--blue); }
   padding: 28px 24px; width: 100%; max-width: 420px; max-height: 86vh; overflow-y: auto;
   box-shadow: 0 16px 48px rgba(0,0,0,.5);
 }
+
+/* 요청: "우편으로 열면 바로 팝업이 떠서... 크레딧이 받아지는지 확인할 수
+   있게" — 팩이 아니라 코인만 든 우편(이벤트 B/C급 등)을 수령했을 때 뜨는
+   간단한 팝업. #pack-reveal-overlay와 같은 z-index로 우편함 위에 뜬다. */
+#coins-reveal-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .75);
+  display: flex; align-items: center; justify-content: center; z-index: 80; padding: 16px;
+}
+.coins-reveal-modal {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  max-width: 320px; text-align: center; padding: 28px 24px;
+}
+.coins-reveal-icon { font-size: 44px; }
+.coins-reveal-amount { font-size: 24px; font-weight: 900; color: var(--gold); }
 #pack-card-wrap { perspective: 900px; width: 170px; }
 #pack-card-wrap .fut-card { animation: cardFlipIn .8s cubic-bezier(.2,.8,.3,1); }
 @keyframes cardFlipIn {
@@ -1119,6 +1144,46 @@ input:focus, select:focus { border-color: var(--blue); }
 #pack-result-text { font-weight: 800; font-size: 16px; text-align: center; }
 #pack-result-text .sub { display: block; font-size: 13px; font-weight: 600; color: var(--dim); margin-top: 4px; }
 .pack-reveal-actions { display: flex; gap: 10px; }
+
+/* ===== event (열쇠 그리드) ===== */
+.event-banner {
+  margin-bottom: 14px; padding: 18px 16px; border-radius: 12px; text-align: center;
+  background: linear-gradient(135deg, #ff7a45, #ffb45e);
+  color: #2b1400; box-shadow: 0 6px 20px rgba(255, 122, 69, .4);
+}
+.event-banner-title { font-size: 18px; font-weight: 900; }
+.event-banner-sub { font-size: 13px; font-weight: 700; margin-top: 4px; opacity: .9; }
+.event-key-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.event-key-count { font-weight: 800; font-size: 14px; margin-right: auto; }
+/* 요청: "열쇠 바둑판을 두고, 전부 가려진 채로" — 5x5 격자, 안 연 칸은
+   자물쇠만 보이다가 열면 등급(SSS~C)이 드러난다. 등급색은 기존 카드
+   tier 팔레트(.tier-gold 등)와 겹치지 않는 별도 스펙트럼으로 잡아 그리드
+   안에서 한눈에 등급 차이가 보이게 했다. */
+.event-grid {
+  display: grid; gap: 8px; margin-bottom: 14px;
+}
+.event-cell {
+  aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--panel2); color: var(--dim);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; font-weight: 900;
+  transition: transform .15s, filter .15s;
+}
+.event-cell:not(:disabled):hover { filter: brightness(1.15); transform: scale(1.04); }
+.event-cell:disabled { cursor: default; }
+.event-cell.opened { font-size: 13px; }
+.event-grade-SSS { background: linear-gradient(160deg, #ff4fd8, #7b2ff7); color: #fff; border-color: #ff4fd8; box-shadow: 0 0 14px rgba(255, 79, 216, .5); }
+.event-grade-SS { background: linear-gradient(160deg, #ffb45e, #ff7a45); color: #2b1400; border-color: #ff7a45; }
+.event-grade-S { background: linear-gradient(160deg, #f7e7a8, #c39b3f); color: #3b2d0a; border-color: #c39b3f; }
+.event-grade-A { background: linear-gradient(160deg, #eef1f5, #93a0ac); color: #29323b; border-color: #93a0ac; }
+.event-grade-B { background: var(--panel2); color: var(--text); border-color: var(--blue); }
+.event-grade-C { background: var(--panel2); color: var(--text); }
+@media (max-width: 480px) {
+  .event-cell { font-size: 16px; }
+  .event-cell.opened { font-size: 11px; }
+}
 
 /* ===== league select / club change / predictions ===== */
 .league-select { width: 100%; margin-bottom: 8px; }

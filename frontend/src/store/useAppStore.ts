@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { api, getToken, setToken } from '../api/client';
 import { activeSquad } from '../game/cards';
 import { toast } from './useToastStore';
-import type { Bootstrap, CatalogPlayer, Team, User } from '../types';
+import type { Bootstrap, CatalogPlayer, EventGrid, MailItem, PackResult, Team, User } from '../types';
 
 export type AuthMode = 'login' | 'register';
 export type SquadMode = 'main' | 'pvp';
@@ -69,7 +69,10 @@ interface AppState {
   evolvePlayer: (playerId: string) => Promise<EvolveResult>;
   sellPlayer: (playerId: string) => Promise<{ coinsGained: number; perfBonusPct: number }>;
   searchRemotePlayers: (q: string) => Promise<{ found: number; added: number }>;
-  claimMail: (mailId: string) => Promise<void>;
+  claimMail: (mailId: string) => Promise<{ mail: MailItem; packResults: PackResult[] | null }>;
+  fetchEventGrid: (eventId: string) => Promise<EventGrid>;
+  buyEventKey: (eventId: string, count: number) => Promise<{ keys: number }>;
+  openEventCell: (eventId: string, cellIndex: number) => Promise<{ grade: string; grid: EventGrid }>;
   resolveComplaint: (
     complaintId: string,
     choiceId: string
@@ -219,8 +222,35 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   claimMail: async (mailId) => {
-    const { user } = await api.post<{ user: User }>('/api/mailbox/claim', { mailId });
+    const { user, mail, packResults } = await api.post<{
+      user: User;
+      mail: MailItem;
+      packResults: PackResult[] | null;
+    }>('/api/mailbox/claim', { mailId });
     set({ me: user });
+    return { mail, packResults };
+  },
+
+  fetchEventGrid: async (eventId) => {
+    const { grid } = await api.get<{ grid: EventGrid }>(`/api/event/${eventId}/grid`);
+    return grid;
+  },
+
+  buyEventKey: async (eventId, count) => {
+    const { user, keys } = await api.post<{ user: User; keys: number }>(`/api/event/${eventId}/buy-key`, {
+      count,
+    });
+    set({ me: user });
+    return { keys };
+  },
+
+  openEventCell: async (eventId, cellIndex) => {
+    const { user, grade, grid } = await api.post<{ user: User; grade: string; grid: EventGrid }>(
+      `/api/event/${eventId}/open-cell`,
+      { cellIndex }
+    );
+    set({ me: user });
+    return { grade, grid };
   },
 
   resolveComplaint: async (complaintId, choiceId) => {

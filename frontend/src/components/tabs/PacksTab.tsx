@@ -3,15 +3,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
 import { api } from '../../api/client';
 import PlayerCard from '../PlayerCard';
-import type { CatalogPlayer, User } from '../../types';
-
-interface PackResult {
-  pack: string;
-  player: CatalogPlayer;
-  duplicate: boolean;
-  unlocked: boolean;
-  refund: number;
-}
+import { formatEventEnd } from '../../ui/format';
+import type { PackResult, User } from '../../types';
 
 const PACK_META: Record<string, { img: string; desc: string; cls: string }> = {
   bronze: { img: '/img/packs/bronze.png', desc: 'OVR 79 이하', cls: 'pack-bronze' },
@@ -44,8 +37,18 @@ export default function PacksTab() {
     }
   };
 
+  // 요청: "이벤트인 만큼 카드팩 최상단에 기간제로 배너 느낌 달아주고
+  // 이벤트 진행 중이라고 인식되게 추가" — 활성 이벤트가 있을 때만 보이고,
+  // 종료일이 지나면(백엔드가 active를 false로 내려줌) 자동으로 사라진다.
+  const activeEvent = bootstrap.events?.find((e) => e.active) || null;
+
   return (
     <div id="tab-packs" className="tab-panel">
+      {activeEvent && (
+        <div className="event-promo-banner">
+          🔥 {activeEvent.name} 진행 중 — {formatEventEnd(activeEvent.endsAt)}까지 · 이벤트 탭에서 확인하세요
+        </div>
+      )}
       <div className="packs-intro dim">
         팩을 열어 무작위 선수를 영입하세요. 이미 보유한 선수가 나오면 판매가(55%)만큼 코인으로 전환됩니다.
       </div>
@@ -84,13 +87,15 @@ export default function PacksTab() {
   );
 }
 
-function PackRevealModal({
+// 우편함(이벤트 보상 등)에서도 재사용한다 — "한 번 더!" 버튼은 팩을 다시
+// 살 수 있을 때만 의미가 있으므로 onAgain이 없으면 숨긴다.
+export function PackRevealModal({
   results,
   onAgain,
   onClose,
 }: {
   results: PackResult[];
-  onAgain: () => void;
+  onAgain?: () => void;
   onClose: () => void;
 }) {
   const best = useMemo(
@@ -216,9 +221,11 @@ function PackRevealModal({
             <ResultText results={results} />
           </div>
           <div className="pack-reveal-actions">
-            <button type="button" className="btn primary" onClick={onAgain}>
-              한 번 더!
-            </button>
+            {onAgain && (
+              <button type="button" className="btn primary" onClick={onAgain}>
+                한 번 더!
+              </button>
+            )}
             <button type="button" className="btn ghost" onClick={onClose}>
               닫기
             </button>

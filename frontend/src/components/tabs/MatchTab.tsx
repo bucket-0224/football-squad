@@ -485,6 +485,9 @@ export default function MatchTab({ visible }: { visible: boolean }) {
             <div className="sb-ovr dim">{awayOvrLine}</div>
           </div>
         </div>
+        <div id="event-banner" key={banner?.token} className={banner ? `eb-${banner.kind}` : 'eb-info'}>
+          {banner?.text || ' '}
+        </div>
         <div className="pause-bar" style={{ display: spectating ? 'none' : undefined }}>
           <button type="button" className="btn small" disabled={pauseDisabled} onClick={() => sendWs({ type: 'pause' })}>
             ⏸ 작전 타임 (<span>{pausesLeft}</span>)
@@ -507,9 +510,6 @@ export default function MatchTab({ visible }: { visible: boolean }) {
         <div className="match-stage">
           <div className="pitch-wrap">
             <LiveMatchCanvas engine={engine} />
-            <div id="event-banner" key={banner?.token} className={banner ? `eb-${banner.kind}` : 'eb-info'}>
-              {banner?.text || ' '}
-            </div>
           </div>
           <div id="pause-panel" className={pausePanelOpen ? '' : 'disabled'} style={{ display: spectating ? 'none' : undefined }}>
             <div className="pp-head">

@@ -322,11 +322,14 @@ function drawFrom(pool) {
   return pool[pool.length - 1];
 }
 
-function openPack(user, packId) {
+// opts.free: 이벤트 보상처럼 이미 다른 값(열쇠 등)을 치르고 얻은 팩을 열
+// 때 — 코인을 다시 청구하지 않는다(우편함 claim 흐름에서 사용, index.js
+// 참고).
+function openPack(user, packId, opts = {}) {
   const def = PACKS[packId];
   if (!def) return { error: '존재하지 않는 팩입니다.', status: 404 };
-  const price = packPrice(def);
-  if (user.coins < price) return { error: '코인이 부족합니다.', status: 400 };
+  const price = opts.free ? 0 : packPrice(def);
+  if (!opts.free && user.coins < price) return { error: '코인이 부족합니다.', status: 400 };
 
   // youth academy fillers of dynamic clubs are club-only, never in packs
   const pool = Object.values(players.CATALOG).filter((p) => !p.youth).filter(def.filter);
