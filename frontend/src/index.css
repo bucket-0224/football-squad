@@ -1434,6 +1434,15 @@ input:focus, select:focus { border-color: var(--blue); }
 .cup-node-lost { border-color: var(--red); opacity: .75; }
 .cup-node-lost .cup-node-round { color: var(--red); }
 .cup-node-upcoming { opacity: .55; }
+/* 아이폰15(393px 폭) 기준 — 공용 .lobby-card의 32px 패딩을 그대로 쓰면
+   3노드 브래킷이 너무 좁아져(콘텐츠 폭 ~297px) 팀명이 심하게 눌린다.
+   공용 .lobby-card는 다른 화면에서 이미 검증된 값이라 건드리지 않고,
+   .cup-lobby-card에서만 좁은 화면 패딩을 줄인다. */
+@media (max-width: 480px) {
+  .cup-lobby-card { padding: 18px; }
+  .cup-bracket { gap: 6px; }
+  .cup-node { padding: 8px 4px; }
+}
 
 /* 컵대회 우승 리빌 — 팩 개봉 리빌(#cere-sparks/.cere-spark, 위 참고)과 같은
    파티클 애니메이션을 재사용해 트로피 이모지 주위에 한 번만 터뜨린다. */
@@ -1441,6 +1450,10 @@ input:focus, select:focus { border-color: var(--blue); }
 .cup-champion-sparks { position: absolute; inset: 0; pointer-events: none; }
 .cup-trophy-emoji { font-size: 56px; animation: cardFlipIn .8s cubic-bezier(.2,.8,.3,1); filter: drop-shadow(0 0 18px rgba(227,179,65,.6)); }
 .cup-result-note { display: inline-block; margin-top: 4px; font-weight: 700; color: var(--gold); }
+@media (max-width: 480px) {
+  .cup-champion-fx { height: 70px; }
+  .cup-trophy-emoji { font-size: 44px; }
+}
 
 /* ===== SBC 챌린지 (스쿼드 탭 서브뷰) ===== */
 .sbc-banner { display: flex; flex-direction: column; gap: 4px; text-align: left; }
@@ -1477,6 +1490,13 @@ input:focus, select:focus { border-color: var(--blue); }
 .sbc-preview.no { color: var(--red); }
 .sbc-picker-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
 .sbc-picker-item { background: none; border: none; padding: 0; cursor: pointer; }
+/* 아이폰15 기준 — 오버레이(16px) + 빌더(20px) 패딩을 빼면 콘텐츠 폭이
+   321px 정도라 4열도 기술적으로는 들어가지만(.fut-card.sz-xs가 56px),
+   카드 사이 여백이 거의 없어 답답하다 — 3열로 줄여 여유를 준다. */
+@media (max-width: 420px) {
+  .sbc-builder, .sbc-picker { padding: 14px; }
+  .sbc-slots { grid-template-columns: repeat(3, 1fr); }
+}
 
 /* ===== 소셜: 친구/길드 (정보 탭 서브뷰) ===== */
 .subtab-badge-wrap { position: relative; display: inline-block; padding-right: 2px; }
@@ -1486,3 +1506,11 @@ input:focus, select:focus { border-color: var(--blue); }
   border-radius: 8px; padding: 8px 10px; color: var(--text); font-size: 13px;
 }
 .social-req-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* 길드 생성 폼(이름+태그+버튼)이 한 줄에 3개라 좁은 화면에서 눌린다 —
+   세로로 스택. 친구 요청 폼(입력 1개+버튼)은 원래도 문제없지만 같은
+   규칙을 적용해도 자연스럽게 유지된다. */
+@media (max-width: 480px) {
+  .social-add-row { flex-wrap: wrap; }
+  .social-add-row input,
+  .social-add-row button { flex: 1 1 100%; }
+}

@@ -169,6 +169,11 @@ const VIZ_AVG_EVENT_SEC = 2.4;
 // 최대 ~2.5초면 충분하지만, 혹시 한 명이라도 걸리는 상황을 대비해
 // 여유를 두고 이 시간이 지나면 남은 인원과 무관하게 결과를 넘긴다.
 const FULL_TIME_EXIT_MAX_SEC = 4.5;
+// 골 셀러브레이션(코너 플래그 세리모니) 지속 시간 — 득점자가 이 시간
+// 동안 코너 플래그로 뛰어가 머문다. 텍스트 배너에 기대지 않고 이 모션
+// 자체가 "골이 들어갔다"는 신호 역할을 하므로, 너무 길게 늘어지지 않게
+// 짧게 잡는다.
+const GOAL_CELEBRATION_SEC = 1.6;
 const BOX_DEPTH = 100;
 const BOX_WIDTH = 200;
 
@@ -437,15 +442,24 @@ export class LiveMatchEngine {
   // "예약된 프레임 id"를 들고 있어 계속 truthy다. 예전엔 그래서 이 함수가
   // "raf가 없을 때만 직접 갱신"했는데, 그 전제("raf가 있으면 프레임 루프가
   // 알아서 곧 갱신해줄 것")가 스로틀 상황에서는 틀려서 스코어보드(분/스코어)가
-  // 서버 tick은 계속 받으면서도 화면엔 영영 안 바뀐 채로 멈춰 보였다. 분/
-  // 스코어는 이제 매 tick마다 무조건 즉시 반영하고, dispMin/shownMin도 같이
-  // 맞춰둬서 나중에 프레임 루프가 다시 돌기 시작해도 숫자가 뒤로 튀지 않는다.
+  // 서버 tick은 계속 받으면서도 화면엔 영영 안 바뀐 채로 멈춰 보였다. 분은
+  // 여전히 매 tick 즉시 반영하지만, 스코어는 "아직 애니메이션으로 재생되지
+  // 않은 골"이 있으면(큐에 대기 중이거나 지금 슛~세리모니 연출 중) 여기서
+  // 먼저 반영하지 않는다 — 안 그러면 골 모션이 뜨기도 전에 스코어보드
+  // 숫자만 먼저 튀어 오른다("골 판정도 안 났는데 점수만 오른다"는 리포트의
+  // 원인). 실제 반영은 shoot()의 case 'goal' 안 cb.onScore가 맡는다. 탭이
+  // 백그라운드라 frame()이 거의 안 돌 때는 골이 계속 큐에 남아 이 스킵이
+  // 오래갈 수 있지만, visibilitychange로 항상 별도 발화하는
+  // catchUpAfterHidden()이 복귀 즉시 큐를 통째로 비우며 스코어를 맞춰주므로
+  // (frame() 진행과 무관) "영원히 멈춘 스코어보드"로 되돌아가지 않는다.
   onTick(minute: number, display: string, score: { home: number; away: number }) {
     this.srvMin = minute;
     this.dispMin = minute;
     this.shownMin = minute;
     this.cb.onMinute(display || minute + "'");
-    this.cb.onScore(score.home, score.away);
+    const goalPending =
+      this.queue.some((e) => e.type === 'goal') || (this.attack ? this.attack.e.type === 'goal' : false);
+    if (!goalPending) this.cb.onScore(score.home, score.away);
     this.tickPossessionRoll();
   }
 
@@ -1147,7 +1161,7 @@ export class LiveMatchEngine {
         this.push(gx + dir * 10, gy + (Math.random() * 52 - 26), shotSpd, {
           wait: 0.18,
           onDone: () => {
-            this.flash = { text: e.ownGoal ? '⚽ OWN GOAL' : '⚽ GOAL!', until: this.now + 1500 };
+            this.flash = { text: e.ownGoal ? '⚽ OWN GOAL' : '⚽ GOAL!', until: this.now + 900 };
             this.carrier = null;
             feed();
             this.cb.onBanner(
@@ -1158,12 +1172,22 @@ export class LiveMatchEngine {
               3000
             );
             if (e.score) this.cb.onScore(e.score.home, e.score.away);
+            // 셀러브레이션(코너 플래그로 뛰어가는 모션)이 이제 "골이
+            // 들어갔다"는 신호를 대신 맡으므로, 텍스트 배너가 오래 붙어있을
+            // 필요가 없다 — attack을 여기서 바로 정리해 페널티/프리킥/코너로
+            // 넣은 골의 ceremony/setPiece 포지셔닝 분기(벽/관중/코너 스팟)가
+            // 득점자의 셀러브레이션 목표 좌표를 가로채지 못하게 한다.
+            done();
+            if (!e.ownGoal && shooter) {
+              const cornerX = gx - dir * 24;
+              const cornerY = this.ball.y < VIZ.H / 2 ? VIZ.M + 14 : VIZ.H - VIZ.M - 14;
+              shooter.run = { tx: cornerX, ty: cornerY, until: this.now / 1000 + GOAL_CELEBRATION_SEC };
+            }
           },
         });
         this.push(VIZ.W / 2, VIZ.H / 2, 250, {
-          wait: 1.2,
+          wait: e.ownGoal ? 1.2 : GOAL_CELEBRATION_SEC + 0.3,
           onDone: () => {
-            done();
             this.stageKickoff(defSide);
           },
         });

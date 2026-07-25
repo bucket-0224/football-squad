@@ -63,10 +63,12 @@ function CupBracket({
   cup,
   onStart,
   disabled,
+  error,
 }: {
   cup: CupState;
   onStart: () => void;
   disabled: boolean;
+  error: string;
 }) {
   const today = new Date().toISOString().slice(0, 10);
   const inProgress = cup.status === 'in_progress';
@@ -108,6 +110,7 @@ function CupBracket({
       <button type="button" className="btn primary big" disabled={startDisabled} onClick={onStart}>
         {inProgress ? `${CUP_ROUND_LABELS[cup.round]} 경기 시작` : '컵대회 도전 시작'}
       </button>
+      <div className="error-msg">{error}</div>
     </div>
   );
 }
@@ -537,12 +540,7 @@ export default function MatchTab({ visible }: { visible: boolean }) {
             </div>
           </div>
         ) : (
-          <>
-            {me.cup && <CupBracket cup={me.cup} onStart={onQueueCup} disabled={queued} />}
-            <div id="match-error" className="error-msg">
-              {matchError}
-            </div>
-          </>
+          me.cup && <CupBracket cup={me.cup} onStart={onQueueCup} disabled={queued} error={matchError} />
         )}
         <div className="lobby-card spectate-card">
           <h2>👀 관전</h2>
