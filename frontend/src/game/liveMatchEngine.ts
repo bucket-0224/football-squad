@@ -412,12 +412,21 @@ export class LiveMatchEngine {
 
   // ---- WS message entry points (mirror handleWsMessage's viz-related cases) ----
 
+  // 요청: "포메이션대로 적극적으로 기능 수행해야지 왜 아무것도 안하고
+  // 가만히 있어" — 탭이 백그라운드로 가면 브라우저가 requestAnimationFrame을
+  // 거의/전혀 안 돌리지만(위 catchUpAfterHidden 주석), this.raf 자체는 여전히
+  // "예약된 프레임 id"를 들고 있어 계속 truthy다. 예전엔 그래서 이 함수가
+  // "raf가 없을 때만 직접 갱신"했는데, 그 전제("raf가 있으면 프레임 루프가
+  // 알아서 곧 갱신해줄 것")가 스로틀 상황에서는 틀려서 스코어보드(분/스코어)가
+  // 서버 tick은 계속 받으면서도 화면엔 영영 안 바뀐 채로 멈춰 보였다. 분/
+  // 스코어는 이제 매 tick마다 무조건 즉시 반영하고, dispMin/shownMin도 같이
+  // 맞춰둬서 나중에 프레임 루프가 다시 돌기 시작해도 숫자가 뒤로 튀지 않는다.
   onTick(minute: number, display: string, score: { home: number; away: number }) {
     this.srvMin = minute;
-    if (!this.raf) {
-      this.cb.onMinute(display || minute + "'");
-      this.cb.onScore(score.home, score.away);
-    }
+    this.dispMin = minute;
+    this.shownMin = minute;
+    this.cb.onMinute(display || minute + "'");
+    this.cb.onScore(score.home, score.away);
     this.tickPossessionRoll();
   }
 
