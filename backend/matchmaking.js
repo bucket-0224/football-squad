@@ -7,6 +7,7 @@ const auth = require('./auth');
 const players = require('./data/players');
 const { FORMATIONS, DEFAULT_FORMATION, LINE, posPenalty } = require('./game/formations');
 const { simulateMatch, simulateRemainder, TACTICS } = require('./game/simulate');
+const { coordFor } = require('./game/bands');
 const { pickReferee } = require('./referees');
 
 // 경기 시작 전 심판 프리뷰 팝업에서 "시작" 버튼을 누를 때까지 실제 시뮬레이션
@@ -65,13 +66,22 @@ function tacticName(id) {
 // Slot-ordered starters with the attributes the top view animates from.
 // Empty slots are explicitly filled by youth stand-ins (OVR 40) — they play,
 // they're weak, and the pitch labels them '유스' instead of showing a ghost.
+//
+// 요청: "대전을 통해서 게임을 진행할때 스쿼드처럼 팀이 배치가 안되는 현상
+// 수정해줘" — 스쿼드 화면에서 자유 배치(드래그)로 옮긴 좌표(slotCoords)가
+// 라이브 매치 상단뷰에는 전혀 전달되지 않아서, 실제로 배치를 옮겨도 경기
+// 중엔 항상 포메이션 프리셋 기본 위치로만 그려지고 있었다. 각 슬롯의 실제
+// 좌표(coordFor — computeRatings가 능력치 계산에 쓰는 것과 동일한 함수)를
+// 같이 실어 보내 프론트(liveMatchEngine.ts)가 그대로 쓸 수 있게 한다.
 function lineupOf(squad) {
   const starters = (squad && squad.starters) || [];
   const formation = squad && FORMATIONS[squad.formation] ? squad.formation : DEFAULT_FORMATION;
   const slots = FORMATIONS[formation];
+  const slotCoords = squad && squad.slotCoords;
   const up = (squad && squad.upgrades) || {};
   const ultraSet = new Set((squad && squad.ultra) || []);
   return Array.from({ length: 11 }, (_, i) => {
+    const coord = coordFor(formation, slotCoords, i);
     const raw = starters[i] && players.getPlayer(starters[i]);
     const p = raw && players.upgraded(raw, up[raw.id], ultraSet.has(raw.id)); // 강화 + Ultra 진화 반영
     if (!p) {
@@ -79,6 +89,7 @@ function lineupOf(squad) {
         id: null,
         name: '유스',
         pos: slots[i] || 'CM',
+        coord,
         ovr: 40,
         youth: true,
         attrs: { pace: 45, shooting: 40, passing: 42, dribbling: 42, defending: 42, physical: 44 },
@@ -88,7 +99,7 @@ function lineupOf(squad) {
     // costs up to 10 OVR (CAM at RB etc.)
     const slotPos = slots[i] || p.pos;
     const pen = posPenalty(p.pos, slotPos);
-    return { id: p.id, name: p.name, pos: slotPos, ovr: Math.max(30, p.ovr - pen), attrs: p.attrs };
+    return { id: p.id, name: p.name, pos: slotPos, coord, ovr: Math.max(30, p.ovr - pen), attrs: p.attrs };
   });
 }
 
@@ -517,6 +528,11 @@ function attach(server) {
   // Detached copy of a user's squad with their 강화 levels, 헌신도,
   // captain/vice-captain and 선수 유형(roles) attached, so the simulation
   // and the top view both see the boosted/role-adjusted cards.
+  //
+  // slotCoords도 반드시 같이 넘겨야 한다 — 안 그러면 computeRatings(이
+  // detached 사본을 그대로 받는다)가 자유 배치 좌표를 하나도 못 보고
+  // 항상 포메이션 프리셋 기본 위치 기준으로만 유형 궁합/자리 페널티를
+  // 계산해서, 스쿼드 화면에서 확인한 것과 실제 대전 결과가 어긋난다.
   function liveSquad(user, sq) {
     return {
       formation: sq.formation,
@@ -528,6 +544,7 @@ function attach(server) {
       captain: sq.captain || null,
       viceCaptain: sq.viceCaptain || null,
       roles: sq.roles || {},
+      slotCoords: sq.slotCoords || null,
     };
   }
 

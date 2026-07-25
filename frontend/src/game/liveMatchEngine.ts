@@ -31,6 +31,12 @@ export interface MatchEvent {
 interface SideCard {
   id?: string;
   name?: string;
+  // 요청: "대전을 통해서 게임을 진행할때 스쿼드처럼 팀이 배치가 안되는
+  // 현상 수정해줘" — 스쿼드 화면에서 자유 배치(드래그)로 옮긴 좌표. 서버가
+  // 슬롯별로 실제 좌표(backend game/bands.js의 coordFor, 커스텀 좌표가
+  // 없으면 포메이션 기본 좌표)를 계산해 실어 보낸다. 없으면(구버전 서버
+  // 응답 등) 프론트의 포메이션 기본 좌표로 대체한다.
+  coord?: [number, number];
   attrs?: {
     pace?: number;
     shooting?: number;
@@ -313,8 +319,8 @@ export class LiveMatchEngine {
       const coords = COORDS[formation] || COORDS['4-3-3'];
       const lineup = msg[side].players || [];
       coords.forEach((c, i) => {
-        const base = vizSpot(c, isHome);
         const card = lineup[i];
+        const base = vizSpot((card && card.coord) || c, isHome);
         const a = (card && card.attrs) || {};
         this.players.push({
           num: i + 1,
@@ -440,10 +446,10 @@ export class LiveMatchEngine {
     const isHome = side === 'home';
     const coords = COORDS[formation] || COORDS['4-3-3'];
     this.team(side).forEach((p, i) => {
-      const base = vizSpot(coords[i] || coords[coords.length - 1], isHome);
+      const card = lineup && lineup[i];
+      const base = vizSpot((card && card.coord) || coords[i] || coords[coords.length - 1], isHome);
       p.baseX = base.x;
       p.baseY = base.y;
-      const card = lineup && lineup[i];
       const a = (card && card.attrs) || {};
       // id를 안 바꾸면 라이브 교체 이후 이 슬롯을 가리키는 새 이벤트가
       // findSprite()의 id 매칭에서 실패해(옛 선수 id로 남아있으니) 조용히
