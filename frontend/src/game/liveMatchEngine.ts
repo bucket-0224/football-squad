@@ -156,6 +156,11 @@ const VIZ = { W: 860, H: 520, M: 34 };
 const VIZ_TIME_CAP_SEC = 180;
 const VIZ_MAX_SPEED = 4;
 const VIZ_AVG_EVENT_SEC = 2.4;
+// 풀타임 후 22명 전원이 터치라인 밖으로 걸어나가는 데 걸리는 최대 대기
+// 시간 — p.off의 이동 속도(90)로는 세로 하프(H/2 - M ≈ 226)를 건너는 데
+// 최대 ~2.5초면 충분하지만, 혹시 한 명이라도 걸리는 상황을 대비해
+// 여유를 두고 이 시간이 지나면 남은 인원과 무관하게 결과를 넘긴다.
+const FULL_TIME_EXIT_MAX_SEC = 4.5;
 const BOX_DEPTH = 100;
 const BOX_WIDTH = 200;
 
@@ -261,6 +266,11 @@ export class LiveMatchEngine {
   private flash: { text: string; until: number } | null = null;
   private lastTs = 0;
   private now = 0;
+  // 풀타임: 시계가 finalMinute(90+추가시간)에 정확히 도달한 뒤에도 곧장
+  // 결과 팝업을 띄우지 않고, 22명 전원이 p.off(기존 퇴장 선수가 터치라인
+  // 밖으로 걸어나가는 것과 동일한 메커니즘, frame()의 players.forEach 참고)
+  // 로 그라운드를 떠나는 걸 먼저 보여준 뒤에 넘긴다.
+  private ending: { msg: ResultMsg; t: number } | null = null;
 
   constructor(callbacks: LiveMatchCallbacks) {
     this.cb = callbacks;
@@ -353,6 +363,7 @@ export class LiveMatchEngine {
     this.attack = null;
     this.runner = null;
     this.pendingResult = null;
+    this.ending = null;
     this.tactics = { home: msg.home.tactic || 'balanced', away: msg.away.tactic || 'balanced' };
     this.line = { home: 140, away: 140 };
     this.breakT = { home: 0, away: 0 };
@@ -491,6 +502,27 @@ export class LiveMatchEngine {
   private deliverResult(msg: ResultMsg) {
     this.cb.onFeedItem('FT', `📣 경기 종료 (${msg.score.home} - ${msg.score.away})`, 'phase');
     this.cb.onResult(msg);
+  }
+
+  // 요청: "타이머가 정확히 끝날 경우 선수가 모두 경기장으로 떠나는 것까지
+  // 구현" — finalMinute(90+추가시간)에 시계가 도달한 순간 곧바로 결과
+  // 팝업으로 넘기지 않고, 22명 전원을 기존 퇴장 처리와 같은 p.off 상태로
+  // 돌려 터치라인 밖으로 걸어나가는 걸 먼저 보여준다. 진행 중이던 공/세트
+  // 피스 연출은 더 이상 의미가 없으므로 여기서 전부 정리한다.
+  private beginFullTime(msg: ResultMsg) {
+    this.cb.onFeedItem('FT', `📣 경기 종료 (${msg.score.home} - ${msg.score.away})`, 'phase');
+    this.banner('📣 경기 종료 — 선수들이 그라운드를 떠납니다', 'phase', 2600);
+    this.attack = null;
+    this.duel = null;
+    this.kickoff = null;
+    this.script = [];
+    this.carrier = null;
+    this.runner = null;
+    this.collect = false;
+    this.players.forEach((p) => {
+      p.off = true;
+    });
+    this.ending = { msg, t: 0 };
   }
 
   // ---- internal helpers (ported ~1:1 from the vanilla viz* functions) ----
@@ -1500,10 +1532,15 @@ export class LiveMatchEngine {
         // 팝업이 뜬다 — finalMinute(서버가 계산한 90+추가시간)까지 시계가
         // 다 채워진 뒤에만 넘긴다.
         const finalMinute = this.pendingResult?.finalMinute ?? 90;
-        if (this.pendingResult && (!this.flash || this.now > this.flash.until) && this.dispMin >= finalMinute) {
+        if (
+          this.pendingResult &&
+          !this.ending &&
+          (!this.flash || this.now > this.flash.until) &&
+          this.dispMin >= finalMinute
+        ) {
           const res = this.pendingResult;
           this.pendingResult = null;
-          this.deliverResult(res);
+          this.beginFullTime(res);
         }
       }
     }
@@ -1814,6 +1851,16 @@ export class LiveMatchEngine {
       p.x = Math.max(M - 8, Math.min(W - M + 8, p.x));
       p.y = Math.max(M - 8, Math.min(H - M + 8, p.y));
     });
+
+    if (this.ending) {
+      this.ending.t += dt;
+      const allOff = this.players.every((p) => p.y <= M - 2 || p.y >= H - M + 2);
+      if (allOff || this.ending.t >= FULL_TIME_EXIT_MAX_SEC) {
+        const res = this.ending.msg;
+        this.ending = null;
+        this.deliverResult(res);
+      }
+    }
 
     if (
       !this.script.length &&
