@@ -55,9 +55,13 @@ export default function EventTab() {
     }
     setBusy(true);
     try {
-      const { grade, grid: nextGrid } = await openEventCell(activeEvent.id, index);
+      const { grade, grid: nextGrid, reset } = await openEventCell(activeEvent.id, index);
       setGrid(nextGrid);
-      toast(`${grade}급 보상 획득! 우편함에서 수령하면 확인할 수 있습니다.`);
+      if (reset) {
+        toast(`🎉 ${grade}급 보상 획득! 그리드가 새로 초기화되었습니다.`);
+      } else {
+        toast(`${grade}급 보상 획득! 우편함에서 수령하면 확인할 수 있습니다.`);
+      }
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));
     } finally {
@@ -104,7 +108,7 @@ export default function EventTab() {
             disabled={busy || cell.opened}
             onClick={() => openCell(cell.index)}
           >
-            {cell.opened ? cell.grade : '🔒'}
+            {cell.opened ? cell.grade : '?'}
           </button>
         ))}
       </div>

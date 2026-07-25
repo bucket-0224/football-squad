@@ -73,16 +73,20 @@ function listEvents() {
 // 유저별 칸-등급 배치를 최초 접근 시 한 번만 섞어서 고정한다(Fisher-Yates)
 // — user.eventGrid[eventId] = { layout: string[], opened: number[] }.
 // 이후 재접속해도 같은 배치가 유지되고, 연 칸만 늘어난다.
+function shuffledGrades(ev) {
+  const layout = [...ev.grid.grades];
+  for (let i = layout.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [layout[i], layout[j]] = [layout[j], layout[i]];
+  }
+  return layout;
+}
+
 function ensureLayout(user, ev) {
   if (!user.eventGrid || typeof user.eventGrid !== 'object') user.eventGrid = {};
   let state = user.eventGrid[ev.id];
   if (!state || !Array.isArray(state.layout) || state.layout.length !== ev.grid.grades.length) {
-    const layout = [...ev.grid.grades];
-    for (let i = layout.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [layout[i], layout[j]] = [layout[j], layout[i]];
-    }
-    state = { layout, opened: [] };
+    state = { layout: shuffledGrades(ev), opened: [] };
     user.eventGrid[ev.id] = state;
   }
   return state;
@@ -143,8 +147,20 @@ function openCell(user, eventId, cellIndex, sendMailFn) {
     message: `🔑 ${ev.name} — ${grade}급 보상`,
     packs: reward.packs || null,
   });
+
+  // 요청: "SSS 보상이 뜨면 초기화가 자동으로 되게 해줘(바둑판이)" — SSS는
+  // 그리드에 1칸뿐이라 누군가 뽑는 순간 나머지 칸은 다시 열 이유가 없어지므로,
+  // 즉시 새로 섞어 전체 칸을 다시 가린다. 프론트가 안내 토스트를 띄울 수
+  // 있도록 reset:true를 함께 내려준다.
+  let reset = false;
+  if (grade === 'SSS') {
+    state.layout = shuffledGrades(ev);
+    state.opened = [];
+    reset = true;
+  }
+
   store.putUser(user);
-  return { grade, mail, grid: publicGrid(user, eventId) };
+  return { grade, mail, reset, grid: publicGrid(user, eventId) };
 }
 
 module.exports = { EVENTS, GRADE_REWARDS, isEventActive, getEvent, listEvents, publicGrid, buyKey, openCell };

@@ -194,7 +194,14 @@ export function PackRevealModal({
         </div>
       ) : (
         <>
-          <div id="pack-card-wrap" className={results.length > 1 ? 'multi' : ''}>
+          {/* 버그: 우편(이벤트 SSS 등, 여러 장짜리 보상)에서 워크아웃 뒤
+              최고 카드 한 장만 보여줄 때도 multi(5칸 그리드) 클래스가 그대로
+              붙어 있어서, 그 한 장이 그리드의 한 칸(전체 폭의 1/5)에
+              갇혀 작게 보였다("가장 오버롤이 높은 애의 카드가 작게 잡혀서
+              뭔지 모르겠어"). multi는 실제로 여러 장을 나란히 보여줄 때만
+              (워크아웃 없음 or 워크아웃 끝난 뒤의 카드 목록) 붙여야 한다 —
+              워크아웃 최고 카드 한 장짜리 화면에는 절대 붙으면 안 됨. */}
+          <div id="pack-card-wrap" className={!showCeremony && results.length > 1 ? 'multi' : ''}>
             {showCeremony ? (
               <PlayerCard player={best.player} size="md" stats />
             ) : (

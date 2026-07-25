@@ -72,7 +72,7 @@ interface AppState {
   claimMail: (mailId: string) => Promise<{ mail: MailItem; packResults: PackResult[] | null }>;
   fetchEventGrid: (eventId: string) => Promise<EventGrid>;
   buyEventKey: (eventId: string, count: number) => Promise<{ keys: number }>;
-  openEventCell: (eventId: string, cellIndex: number) => Promise<{ grade: string; grid: EventGrid }>;
+  openEventCell: (eventId: string, cellIndex: number) => Promise<{ grade: string; grid: EventGrid; reset: boolean }>;
   resolveComplaint: (
     complaintId: string,
     choiceId: string
@@ -245,12 +245,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   openEventCell: async (eventId, cellIndex) => {
-    const { user, grade, grid } = await api.post<{ user: User; grade: string; grid: EventGrid }>(
-      `/api/event/${eventId}/open-cell`,
-      { cellIndex }
-    );
+    const { user, grade, grid, reset } = await api.post<{
+      user: User;
+      grade: string;
+      grid: EventGrid;
+      reset: boolean;
+    }>(`/api/event/${eventId}/open-cell`, { cellIndex });
     set({ me: user });
-    return { grade, grid };
+    return { grade, grid, reset };
   },
 
   resolveComplaint: async (complaintId, choiceId) => {

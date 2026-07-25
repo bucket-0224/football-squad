@@ -610,7 +610,7 @@ app.post('/api/event/:eventId/buy-key', auth.authMiddleware, (req, res) => {
 app.post('/api/event/:eventId/open-cell', auth.authMiddleware, (req, res) => {
   const r = event.openCell(req.user, req.params.eventId, (req.body || {}).cellIndex, mailbox.sendMail);
   if (r.error) return bad(res, r.status, r.error);
-  res.json({ grade: r.grade, grid: r.grid, user: sanitizeUser(req.user) });
+  res.json({ grade: r.grade, grid: r.grid, reset: r.reset, user: sanitizeUser(req.user) });
 });
 
 app.post('/api/market/sell', auth.authMiddleware, (req, res) => {
