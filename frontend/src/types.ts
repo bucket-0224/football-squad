@@ -165,6 +165,7 @@ export interface EventGrid {
   eventId: string;
   cells: EventGridCell[];
   keys: number;
+  reset?: boolean;
 }
 
 export interface PackResult {

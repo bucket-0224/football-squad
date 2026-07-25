@@ -8,7 +8,7 @@ const store = require('./store');
 const auth = require('./auth');
 const players = require('./data/players');
 const { FORMATIONS, DEFAULT_FORMATION, LINE, posPenalty } = require('./game/formations');
-const { computeRatings, TACTICS, ROLE_DEFS } = require('./game/simulate');
+const { computeRatings, TACTICS, ROLE_DEFS, defaultRoleIdFor } = require('./game/simulate');
 const matchmaking = require('./matchmaking');
 const transfer = require('./transfer');
 const predictions = require('./predictions');
@@ -438,9 +438,22 @@ app.post('/api/squad/auto', auth.authMiddleware, (req, res) => {
   const poolIds = isPvp ? req.user.drawn : req.user.owned;
   const starters = bestStarters(poolIds, formation);
 
+  // 요청: "RB면 RB에 국한되어서 플레이스타일을 지정할 수 있어야하고, 배치가
+  // 된 순간부터는 그 포지션에 플레이스타일 중 기본이 선택되어야" — 베스트
+  // XI 추천은 슬롯마다 다른 선수를 앉히므로, 기존에 골라둔 유형이 새 슬롯
+  // 위치에서 더 이상 맞지 않으면 그 슬롯의 기본 유형으로 되돌린다.
+  const slots = FORMATIONS[formation];
   const nextRoles = {};
-  Object.entries(squad.roles || {}).forEach(([pid, roleId]) => {
-    if (starters.includes(pid)) nextRoles[pid] = roleId;
+  starters.forEach((pid, i) => {
+    if (!pid) return;
+    const prevRoleId = (squad.roles || {})[pid];
+    const prevRole = prevRoleId && ROLE_DEFS[prevRoleId];
+    if (prevRole && prevRole.pos.includes(slots[i])) {
+      nextRoles[pid] = prevRoleId;
+    } else {
+      const def = defaultRoleIdFor(slots[i]);
+      if (def) nextRoles[pid] = def;
+    }
   });
   const target = isPvp ? 'pvpSquad' : 'squad';
   req.user[target] = {

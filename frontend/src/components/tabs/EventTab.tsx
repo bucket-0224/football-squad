@@ -18,7 +18,13 @@ export default function EventTab() {
   useEffect(() => {
     if (!eventId) return;
     fetchEventGrid(eventId)
-      .then(setGrid)
+      .then((g) => {
+        setGrid(g);
+        // 요청: "SSS를 이미 뽑은 경우도 배제할 수 없으니까 이벤트 탭에
+        // 들어갔을때 SSS가 이미 떠있다면 바로 자동 초기화" — 탭 진입 시
+        // 조회한 그리드 자체가 이미 백엔드에서 리셋된 채로 온 경우를 안내.
+        if (g.reset) toast('🎉 SSS 보상이 있던 그리드가 새로 초기화되었습니다.');
+      })
       .catch((err) => toast(err instanceof Error ? err.message : String(err)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);

@@ -82,21 +82,38 @@ function shuffledGrades(ev) {
   return layout;
 }
 
+// SSS는 그리드에 1칸뿐이라, 그 칸이 이미 열린 채로 남아 있는 상태를 발견하면
+// (openCell에서 즉시 리셋하지만, 혹시 그 로직이 배포되기 전에 이미 SSS를
+// 뽑아 놓은 유저가 있을 수 있어 "배제할 수 없다") 어디서 상태를 건드리든
+// 즉시 다시 섞어 가린다 — openCell뿐 아니라 그리드 조회(이벤트 탭 진입)
+// 시점에도 똑같이 적용된다.
+function resetIfSSSOpened(state, ev) {
+  const sssOpened = state.opened.some((i) => state.layout[i] === 'SSS');
+  if (!sssOpened) return false;
+  state.layout = shuffledGrades(ev);
+  state.opened = [];
+  return true;
+}
+
 function ensureLayout(user, ev) {
   if (!user.eventGrid || typeof user.eventGrid !== 'object') user.eventGrid = {};
   let state = user.eventGrid[ev.id];
+  let reset = false;
   if (!state || !Array.isArray(state.layout) || state.layout.length !== ev.grid.grades.length) {
     state = { layout: shuffledGrades(ev), opened: [] };
     user.eventGrid[ev.id] = state;
+  } else {
+    reset = resetIfSSSOpened(state, ev);
   }
-  return state;
+  return { state, reset };
 }
 
 // 프론트에 보여줄 그리드 상태 — 아직 안 연 칸은 등급을 숨긴다(grade:null).
 function publicGrid(user, eventId) {
   const ev = getEvent(eventId);
   if (!ev) return null;
-  const state = ensureLayout(user, ev);
+  const { state, reset } = ensureLayout(user, ev);
+  if (reset) store.putUser(user);
   return {
     eventId: ev.id,
     cells: state.layout.map((grade, i) => ({
@@ -105,6 +122,7 @@ function publicGrid(user, eventId) {
       grade: state.opened.includes(i) ? grade : null,
     })),
     keys: (user.keys && user.keys[ev.id]) || 0,
+    reset,
   };
 }
 
@@ -129,7 +147,7 @@ function buyKey(user, eventId, count) {
 function openCell(user, eventId, cellIndex, sendMailFn) {
   const ev = getEvent(eventId);
   if (!isEventActive(ev)) return { error: '진행 중인 이벤트가 아닙니다.', status: 400 };
-  const state = ensureLayout(user, ev);
+  const { state } = ensureLayout(user, ev);
   const idx = Number(cellIndex);
   if (!Number.isInteger(idx) || idx < 0 || idx >= state.layout.length) {
     return { error: '잘못된 칸입니다.', status: 400 };
@@ -152,12 +170,7 @@ function openCell(user, eventId, cellIndex, sendMailFn) {
   // 그리드에 1칸뿐이라 누군가 뽑는 순간 나머지 칸은 다시 열 이유가 없어지므로,
   // 즉시 새로 섞어 전체 칸을 다시 가린다. 프론트가 안내 토스트를 띄울 수
   // 있도록 reset:true를 함께 내려준다.
-  let reset = false;
-  if (grade === 'SSS') {
-    state.layout = shuffledGrades(ev);
-    state.opened = [];
-    reset = true;
-  }
+  const reset = resetIfSSSOpened(state, ev);
 
   store.putUser(user);
   return { grade, mail, reset, grid: publicGrid(user, eventId) };

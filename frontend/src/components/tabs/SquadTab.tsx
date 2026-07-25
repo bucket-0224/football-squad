@@ -3,7 +3,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { toast } from '../../store/useToastStore';
 import { activeRatings, activeSquad, upgradedCard } from '../../game/cards';
 import { COORDS } from '../../game/formationCoords';
-import { BAND_LABEL, bandOfY, convertedCardByBand, slotPositionLabel } from '../../game/bands';
+import { BAND_LABEL, bandOfY, convertedCardByBand, placedLabelFor, resetInvalidRoles, roleLookupLabel, slotPositionLabel } from '../../game/bands';
 import PlayerCard, { EmptySlotCard } from '../PlayerCard';
 import OwnedList from '../OwnedList';
 import PickerModal from '../PickerModal';
@@ -64,27 +64,25 @@ function RolePicker({
 }) {
   const saveSquad = useAppStore((s) => s.saveSquad);
 
-  // 요청 변천사 최종본: "선수가 원치 않는 포지션이나 대표하는 포지션이
-  // 아님에도 배치가 된 경우에 원치 않는 유형도 적용이 가능해야해" — 처음엔
-  // 배치 자리(placedPos)에 맞는 유형만 후보로 보여줬는데, 그 필터 자체도
-  // "안 맞는 유형"을 막고 있어 요청과 어긋났다. 이제 포지션/배치와 완전히
-  // 무관하게 전체 유형(roles) 중 아무거나 고를 수 있다 — 백엔드
-  // (PUT /api/squad, simulate.js의 roleAwareScore)도 같은 기준으로 이미
-  // 고쳤으므로 여기서 고른 유형은 실제 능력치 계산에 그대로 반영된다.
-  // placedLabel(카드에 찍히는 지금 이 자리 라벨)은 정보 표시용으로만
-  // 남겨둔다 — 유형 선택 자체와는 이제 무관.
+  // 요청 변천사 최종본: "모든 플레이 스타일을 부여하는게 아니라, RB면 RB에
+  // 국한되어서 플레이스타일을 지정할 수 있어야해" — 지금 배치된 자리
+  // (placedLabel, 카드에 실제로 찍히는 좌표 기반 라벨과 동일한 기준)에서
+  // 유효한 유형만 후보로 보여준다. 유효한 후보가 없는 선수(GK)는 아예
+  // 행을 만들지 않는다.
   const allOpts = Object.entries(roles);
   const rows = squad.starters
     .map((id, i) => {
       const p = id ? catalog.get(id) : null;
       if (!p) return null;
       const coord = coords[i];
-      const placedLabel = p.pos === 'GK' || !coord ? p.pos : slotPositionLabel(coord[0], coord[1]);
+      const placedLabel = placedLabelFor(p, coord);
+      const opts = allOpts.filter(([, r]) => r.pos.includes(roleLookupLabel(placedLabel)));
+      if (!opts.length) return null;
       let current: string | undefined = squad.roles?.[p.id];
-      if (!current || !allOpts.some(([roleId]) => roleId === current)) {
+      if (!current || !opts.some(([roleId]) => roleId === current)) {
         current = undefined;
       }
-      return { p, placedLabel, opts: allOpts, current };
+      return { p, placedLabel, opts, current };
     })
     .filter((x): x is NonNullable<typeof x> => !!x);
 
@@ -222,8 +220,12 @@ export default function SquadTab() {
     if (existing === targetSlot) return;
     if (existing >= 0) starters[existing] = starters[targetSlot];
     starters[targetSlot] = playerId;
+    // 요청: "배치가 된 순간부터는 그 포지션에 플레이스타일 중 기본이
+    // 선택되어야" — 스왑으로 자리가 바뀐 선수(들)의 유형이 새 자리에서
+    // 더 이상 안 맞으면 그 자리 기본 유형으로 되돌린다.
+    const roles = resetInvalidRoles(starters, coords, catalog, squad.roles || {}, bootstrap.roles);
     try {
-      await saveSquad({ starters });
+      await saveSquad({ starters, roles });
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));
     }
@@ -279,7 +281,10 @@ export default function SquadTab() {
         const pct = pitchPct(e.clientX, e.clientY);
         if (pct) {
           const next = coords.map((c, idx) => (idx === pd.slotIndex ? [pct.x, pct.y] : c)) as [number, number][];
-          saveSquad({ slotCoords: next }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
+          // 슬롯 자체를 옮기면 그 자리에 서 있는 선수의 배치 라벨도 바뀔 수
+          // 있으니(예: RB 슬롯을 중원으로 끌어올림) 유형도 같이 재검증한다.
+          const roles = resetInvalidRoles(squad.starters, next, catalog, squad.roles || {}, bootstrap.roles);
+          saveSquad({ slotCoords: next, roles }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
         }
         setDraftCoord(null);
         return;
@@ -305,7 +310,8 @@ export default function SquadTab() {
   }, [squad.starters, coords]);
 
   const onResetCoords = () => {
-    saveSquad({ slotCoords: null }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
+    const roles = resetInvalidRoles(squad.starters, baseCoords, catalog, squad.roles || {}, bootstrap.roles);
+    saveSquad({ slotCoords: null, roles }).catch((err) => toast(err instanceof Error ? err.message : String(err)));
   };
 
   // 배치 편집을 끝낼 때, 자유롭게 옮긴 위치를 라인 단위로 다시 묶어(골키퍼
@@ -531,6 +537,7 @@ export default function SquadTab() {
           slotIndex={pickerSlot}
           pos={slots[pickerSlot]}
           band={slots[pickerSlot] === 'GK' ? 5 : bandOfY((coords[pickerSlot] || [50, 50])[1])}
+          coords={coords}
           onClose={() => setPickerSlot(null)}
         />
       )}

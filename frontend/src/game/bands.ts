@@ -110,3 +110,56 @@ export function convertedCardByBand<T extends { pos: string; ovr: number }>(p: T
   const pen = bandPenalty(p.pos, band);
   return { ...p, pos: slotPositionLabel(x, y), ovr: pen ? Math.max(30, p.ovr - pen) : p.ovr };
 }
+
+// 요청: "RB면 RB에 국한되어서 플레이스타일을 지정할 수 있어야해" — 유형
+// 궁합을 판정할 "지금 이 자리"는 카드에 실제로 찍히는 라벨과 같은 기준
+// (좌표 기반 slotPositionLabel)이어야 사용자가 보는 것과 어긋나지 않는다.
+// GK는 드래그가 막혀 있으니 좌표 계산 없이 선수 본인의 pos를 그대로 쓴다.
+export function placedLabelFor(p: { pos: string }, coord: [number, number] | undefined): string {
+  return p.pos === 'GK' || !coord ? p.pos : slotPositionLabel(coord[0], coord[1]);
+}
+
+// slotPositionLabel은 같은 라인에 여러 명이 나란히 설 때 카드 표시용으로
+// LCB/RCB, LDM/RDM, LCM/RCM, LST/RST처럼 더 세분화된 라벨을 준다(위 ZONE_LABEL
+// 주석 참고) — 하지만 ROLE_DEFS의 pos 목록은 이런 좌우 구분 없이 CB/CDM/CM/ST
+// 같은 기본형만 쓴다(넓은 자리인 LW/RW/LB/RB/LM/RM/LWB/RWB는 원래도 좌우
+// 구분이 그대로 유형 목록과 일치한다). 유형 궁합을 볼 땐 이 기본형으로
+// 정규화해야 "LCB에 서 있는 선수도 CB 유형을 고를 수 있다"가 성립한다.
+const ROLE_LOOKUP_LABEL: Record<string, string> = {
+  LST: 'ST', RST: 'ST',
+  LCM: 'CM', RCM: 'CM',
+  LDM: 'CDM', RDM: 'CDM',
+  LCB: 'CB', RCB: 'CB',
+};
+
+export function roleLookupLabel(label: string): string {
+  return ROLE_LOOKUP_LABEL[label] || label;
+}
+
+// 요청: "배치가 된 순간부터는 그 포지션에 플레이스타일 중 기본이 선택되어야"
+// — 배치(스왑/드래그/좌표 이동 등)가 바뀔 때마다 호출해서, 지금 서 있는
+// 자리에서 더 이상 유효하지 않은(= roles[..].pos에 이 라벨이 없는) 유형만
+// 그 자리의 기본 유형으로 되돌린다. 여전히 유효한 선수의 커스텀 선택은
+// 그대로 둔다 — 매번 전부 초기화하면 무관한 선수의 선택까지 날아가버린다.
+export function resetInvalidRoles(
+  starters: (string | null)[],
+  coords: [number, number][],
+  catalog: Map<string, { pos: string }>,
+  prevRoles: Record<string, string>,
+  rolesCatalog: Record<string, { pos: string[]; isDefault?: boolean }>
+): Record<string, string> {
+  const next = { ...prevRoles };
+  starters.forEach((id, i) => {
+    if (!id) return;
+    const p = catalog.get(id);
+    if (!p) return;
+    const label = roleLookupLabel(placedLabelFor(p, coords[i]));
+    const cur = next[id];
+    const curValid = !!cur && !!rolesCatalog[cur] && rolesCatalog[cur].pos.includes(label);
+    if (curValid) return;
+    const def = Object.entries(rolesCatalog).find(([, r]) => r.isDefault && r.pos.includes(label));
+    if (def) next[id] = def[0];
+    else delete next[id];
+  });
+  return next;
+}

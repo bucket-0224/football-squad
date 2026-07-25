@@ -1,7 +1,7 @@
 import { useAppStore } from '../store/useAppStore';
 import { toast } from '../store/useToastStore';
 import { activePoolIds, activeSquad, slotLineOf, upgradedCard } from '../game/cards';
-import { bandPenalty, fitByBand, type Band } from '../game/bands';
+import { bandPenalty, fitByBand, resetInvalidRoles, type Band } from '../game/bands';
 import PlayerCard from './PlayerCard';
 import type { CatalogPlayer } from '../types';
 
@@ -9,12 +9,13 @@ interface PickerModalProps {
   slotIndex: number;
   pos: string;
   band: Band;
+  coords: [number, number][];
   onClose: () => void;
 }
 
-export default function PickerModal({ slotIndex, pos, band, onClose }: PickerModalProps) {
-  const { me, squadMode, catalog, saveSquad } = useAppStore();
-  if (!me) return null;
+export default function PickerModal({ slotIndex, pos, band, coords, onClose }: PickerModalProps) {
+  const { me, squadMode, bootstrap, catalog, saveSquad } = useAppStore();
+  if (!me || !bootstrap) return null;
 
   const squad = activeSquad(me, squadMode);
   const line = slotLineOf(pos);
@@ -35,8 +36,11 @@ export default function PickerModal({ slotIndex, pos, band, onClose }: PickerMod
     const existing = starters.indexOf(playerId);
     if (existing >= 0) starters[existing] = starters[slotIndex]; // swap
     starters[slotIndex] = playerId;
+    // 요청: "배치가 된 순간부터는 그 포지션에 플레이스타일 중 기본이
+    // 선택되어야" — 드래그 배치(SquadTab.assignToSlot)와 동일한 보정.
+    const roles = resetInvalidRoles(starters, coords, catalog, squad.roles || {}, bootstrap.roles);
     try {
-      await saveSquad({ starters });
+      await saveSquad({ starters, roles });
       onClose();
     } catch (err) {
       toast(err instanceof Error ? err.message : String(err));

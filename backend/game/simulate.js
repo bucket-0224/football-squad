@@ -141,19 +141,16 @@ const ROLE_EMPHASIS = {
   noNonsenseCB: { shooting: 0, passing: 0 },
 };
 
-// 요청 변천사: 처음엔 "현재 맞지 않는 포지션에 있더라도 유형 적용은
-// 상관없이 되게 해주고(공미여도 윙어면 윙어 스타일 플레이)"라서 player.pos
-// 대신 slotPos(그 슬롯의 포메이션 라벨)로 검사하도록 고쳤었다. 그런데 그
-// 조건 자체도 "슬롯에 안 맞는 유형"을 여전히 막고 있었고, 그게 다시
-// 부작용을 냈다("주장/부주장/전술 변경이 계속 Cherki 때문에 거부됨" — 이건
-// PUT /api/squad 쪽에서 별도로 고쳤다). 최종 요청: "선수가 원치 않는
-// 포지션이나 대표하는 포지션이 아님에도 배치가 된 경우에 원치 않는
-// 유형도 적용이 가능해야해" — 포지션/슬롯과 무관하게 고른 유형을 그대로
-// 적용한다. roleId가 있으면(=유저가 뭔가 골랐으면) 무조건 그 공식을 쓰고,
-// 없을 때만 슬롯 라인의 기본 공식으로 대체한다.
-function roleAwareScore(player, slotLine, roleId) {
+// 요청 변천사: "포지션과 무관하게 아무 유형이나 적용" → "그건 너무 과했다,
+// RB면 RB에 국한되어서 유형을 지정할 수 있어야" — 다시 슬롯 궁합을 본다.
+// 다만 예전에 이 궁합 검사가 PUT /api/squad의 "저장" 자체를 막아서 생긴
+// 버그("주장/부주장/전술 변경이 Cherki 때문에 거부됨")는 그 저장 검증
+// 로직에서 난 것이었지 여기(순수 계산 함수, 저장을 막지 않음)와는 무관 —
+// 여기서 슬롯에 안 맞는 roleId를 만나면 그냥 슬롯 기본 공식으로 조용히
+// 대체할 뿐 아무것도 거부하지 않으므로 같은 버그가 재발할 여지가 없다.
+function roleAwareScore(player, slotPos, slotLine, roleId) {
   const role = roleId && ROLE_DEFS[roleId];
-  if (role) return role.score(player.attrs);
+  if (role && role.pos.includes(slotPos)) return role.score(player.attrs);
   return roleScore(player.attrs, slotLine);
 }
 
@@ -212,10 +209,12 @@ function computeRatings(squad) {
     else if (viceCaptainId && id === viceCaptainId) mult *= 1.025;
     const roleId = roleMap ? roleMap[id] : null;
     const role = roleId && ROLE_DEFS[roleId];
-    // 유형은 슬롯/포지션과 무관하게 그대로 적용한다(위 roleAwareScore 주석
-    // 참고) — 골랐으면 그 유형, 안 골랐을 때만 슬롯 기본 유형으로 대체.
-    const effectiveRoleId = role ? roleId : defaultRoleIdFor(slotPos);
-    const score = roleAwareScore(p, slotLine, roleId) * mult;
+    // 유형은 지금 배치된 슬롯(slotPos)에 맞을 때만 적용한다(위
+    // roleAwareScore 주석 참고) — 안 맞거나 아예 안 골랐으면 슬롯 기본
+    // 유형으로 대체.
+    const roleFits = role && role.pos.includes(slotPos);
+    const effectiveRoleId = roleFits ? roleId : defaultRoleIdFor(slotPos);
+    const score = roleAwareScore(p, slotPos, slotLine, roleId) * mult;
     lines[slotLine].push(score);
     roster.push({ player: p, slotPos, slotLine, chem, score, roleId: effectiveRoleId });
   });
@@ -783,4 +782,4 @@ function simulateRemainder(homeSquad, awaySquad, fromMinute, baseScore, homeName
   return simulateMatch(homeSquad, awaySquad, homeName, awayName, { ...opts, fromMinute, baseScore });
 }
 
-module.exports = { computeRatings, simulateMatch, simulateRemainder, TACTICS, ROLE_DEFS };
+module.exports = { computeRatings, simulateMatch, simulateRemainder, TACTICS, ROLE_DEFS, defaultRoleIdFor };
