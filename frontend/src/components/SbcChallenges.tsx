@@ -134,9 +134,17 @@ export default function SbcChallenges() {
     setPickSlot(null);
   };
 
+  // 요청: "기존 선수의 카드 포지션에 맞는 포지션만도 필터링해서 해줘" —
+  // 실제 스쿼드 편집(PickerModal)은 자리 페널티를 감수하고 라인만 맞으면
+  // 배치를 허용하지만, SBC는 슬롯에 적힌 포지션과 카드의 pos가 정확히
+  // 일치하는 카드만 후보로 보여준다(GK 슬롯도 이 규칙에 자연히 포함됨).
   const candidatesFor = (slotIdx: number) => {
+    const pos = slots[slotIdx];
     const usedElsewhere = new Set(starters.filter((_, i) => i !== slotIdx).filter(Boolean) as string[]);
-    return ownedCards.filter((p) => !usedElsewhere.has(p.id)).sort((a, b) => b.ovr - a.ovr);
+    return ownedCards
+      .filter((p) => p.pos === pos)
+      .filter((p) => !usedElsewhere.has(p.id))
+      .sort((a, b) => b.ovr - a.ovr);
   };
 
   const assign = (slotIdx: number, playerId: string) => {
@@ -288,6 +296,9 @@ export default function SbcChallenges() {
               </button>
             )}
             <div className="sbc-picker-list">
+              {candidatesFor(pickSlot).length === 0 && (
+                <p className="dim small-text">{slots[pickSlot]} 포지션 보유 카드가 없습니다.</p>
+              )}
               {candidatesFor(pickSlot).map((p) => (
                 <button type="button" key={p.id} className="sbc-picker-item" onClick={() => assign(pickSlot, p.id)}>
                   <PlayerCard player={p} size="xs" />

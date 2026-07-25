@@ -63,24 +63,22 @@ export default function MarketTab() {
           <option value="MID">미드필더</option>
           <option value="ATT">공격수</option>
         </select>
-        <label className="check-label">
-          <input
-            type="checkbox"
-            id="market-enhanced"
-            checked={enhancedOnly}
-            onChange={(e) => setEnhancedOnly(e.target.checked)}
-          />{' '}
-          강화 카드만
-        </label>
-        <label className="check-label">
-          <input
-            type="checkbox"
-            id="market-buyout"
-            checked={buyoutOnly}
-            onChange={(e) => setBuyoutOnly(e.target.checked)}
-          />{' '}
-          바이아웃(FA)만
-        </label>
+        <button
+          type="button"
+          className={'chip-toggle' + (enhancedOnly ? ' active' : '')}
+          aria-pressed={enhancedOnly}
+          onClick={() => setEnhancedOnly((v) => !v)}
+        >
+          ⭐ 강화 카드만
+        </button>
+        <button
+          type="button"
+          className={'chip-toggle' + (buyoutOnly ? ' active' : '')}
+          aria-pressed={buyoutOnly}
+          onClick={() => setBuyoutOnly((v) => !v)}
+        >
+          🆓 바이아웃(FA)만
+        </button>
       </div>
       <div id="market-list">
         {!visible.length && !qLower && <p className="dim">조건에 맞는 선수가 없습니다.</p>}
@@ -92,7 +90,7 @@ export default function MarketTab() {
               <div className="cc-price">🪙 {(p.price || 0).toLocaleString()}</div>
               <div className="cc-actions">
                 {owned ? (
-                  <span className="starter-tag">보유중</span>
+                  <span className="market-owned-badge">✔ 보유중</span>
                 ) : (
                   <button type="button" className="btn small primary" onClick={() => setNegoTarget(p)}>
                     {p.team ? '협상 시작' : '바이아웃 협상'}

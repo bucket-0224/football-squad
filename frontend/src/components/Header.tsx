@@ -4,6 +4,7 @@ import { avatarSrc } from '../config';
 import MailboxModal from './MailboxModal';
 import NotificationsModal from './NotificationsModal';
 import AccountSettingsModal from './AccountSettingsModal';
+import CountUp from './CountUp';
 
 export default function Header() {
   const { me, logout } = useAppStore();
@@ -34,8 +35,12 @@ export default function Header() {
         <span className="chip ovr-chip">OVR {me.ratings.OVR}</span>
       </div>
       <div className="hdr-right">
-        <span className="chip coin-chip">🪙 {me.coins.toLocaleString()}</span>
-        <span className="chip point-chip">🏆 승점 {me.points}</span>
+        <span className="chip coin-chip">
+          🪙 <CountUp value={me.coins} formatter={(n) => n.toLocaleString()} />
+        </span>
+        <span className="chip point-chip">
+          🏆 승점 <CountUp value={me.points} />
+        </span>
         <button type="button" className="btn ghost small mailbox-btn" onClick={() => setMailOpen(true)}>
           ✉️ <span className={'mailbox-badge' + (unclaimed ? '' : ' hidden')}>{unclaimed}</span>
         </button>

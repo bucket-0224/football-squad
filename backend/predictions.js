@@ -100,6 +100,34 @@ function fixtureFromEvent(ev, league) {
   };
 }
 
+// 요청: "K리그 실시간 76분인데 현재 예측 여기선 99분으로 뜸" — 예전엔
+// 킥오프 시각으로부터 그냥 흐른 벽시계 분을 그대로 보여줬는데, 하프타임
+// 휴식(약 15분)만큼 실제 경기 시간보다 항상 더 크게 나온다(전/후반 사이
+// 공은 안 굴러가는데 시계는 계속 흐르므로). 두 단계로 보정한다:
+//   1) TheSportsDB가 strStatus에 실제 분(예: "76")을 그대로 주는 경우가
+//      있어 그게 있으면 최우선으로 쓴다 — 벽시계 추정은 그게 없을 때만.
+//   2) 없으면 벽시계 경과분에서 하프타임 휴식분을 빼는 방식으로 추정.
+//      전반 45분까지는 그대로, 휴식 구간(45~45+휴식분)엔 45분에 고정,
+//      후반 시작 뒤엔 휴식분만큼 빼서 실제 경기 시간에 더 가깝게 만든다.
+//      추가시간까지 정확히 맞출 순 없지만(그건 API가 없으면 알 수 없다),
+//      최소한 하프타임만큼 부풀려 보이는 건 없앤다.
+const HALFTIME_BREAK_MIN = 15;
+const LIVE_MINUTE_CAP = 130;
+
+function liveMinuteFromStatus(status) {
+  if (!status) return null;
+  const m = /^(\d{1,3})'?$/.exec(String(status).trim());
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) && n >= 0 ? Math.min(LIVE_MINUTE_CAP, n) : null;
+}
+
+function estimateLiveMinute(wallClockMin) {
+  if (wallClockMin <= 45) return wallClockMin;
+  if (wallClockMin <= 45 + HALFTIME_BREAK_MIN) return 45;
+  return Math.min(LIVE_MINUTE_CAP, wallClockMin - HALFTIME_BREAK_MIN);
+}
+
 function outcomeOf(score) {
   if (score.home === score.away) return 'draw';
   return score.home > score.away ? 'home' : 'away';
@@ -287,9 +315,14 @@ function fixtureView(fx, userId) {
     awayLogo: fx.awayLogo,
     kickoffAt: fx.kickoffAt,
     status: fx.status,
-    // 실시간 정보: 경과 시간은 킥오프 시각으로부터 항상 계산 가능, 스코어는
-    // TheSportsDB가 값을 채워줬을 때만(무료 티어라 보장 안 됨) 채워진다.
-    elapsedMin: isLive ? Math.max(0, Math.floor((Date.now() - fx.kickoffAt) / 60000)) : null,
+    // 실시간 경과 시간: TheSportsDB가 strStatus에 실제 분을 주면 그걸
+    // 우선 쓰고(가장 정확), 없으면 킥오프 시각으로부터 하프타임 휴식을
+    // 보정한 추정치로 대체한다(위 estimateLiveMinute 참고) — 벽시계
+    // 경과분을 그대로 보여주면 하프타임만큼 항상 부풀려 보인다.
+    elapsedMin: isLive
+      ? liveMinuteFromStatus(fx.live && fx.live.status) ??
+        estimateLiveMinute(Math.max(0, Math.floor((Date.now() - fx.kickoffAt) / 60000)))
+      : null,
     live: isLive && fx.live ? { home: fx.live.home, away: fx.live.away } : null,
     result: fx.result ? { score: fx.result.score, outcome: fx.result.outcome } : null,
     myBet: bet ? { pick: bet.pick, score: bet.score || null, reward: bet.reward || null } : null,

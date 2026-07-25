@@ -147,6 +147,7 @@ function FriendsSub({ onCountChange }: { onCountChange: (n: number) => void }) {
       </div>
       <div>
         <h3>📨 친구 요청</h3>
+        <div className="social-request-blocks">
         <div className="team-block">
           <h4>받은 요청</h4>
           <ol className="mini-board">
@@ -201,6 +202,7 @@ function FriendsSub({ onCountChange }: { onCountChange: (n: number) => void }) {
               <li className="dim">보낸 요청이 없습니다.</li>
             )}
           </ol>
+        </div>
         </div>
       </div>
     </div>
@@ -384,7 +386,7 @@ function GuildSub({ me }: { me: User }) {
                         <td>
                           {g.memberCount}/{MAX_GUILD_MEMBERS}
                         </td>
-                        <td>
+                        <td className="col-squad-btn">
                           <button type="button" className="btn small primary" onClick={() => requestJoin(g.id)}>
                             가입 신청
                           </button>

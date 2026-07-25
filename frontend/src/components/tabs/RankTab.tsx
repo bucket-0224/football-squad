@@ -7,9 +7,16 @@ import PlayerCard from '../PlayerCard';
 import HexChart from '../HexChart';
 import OpponentSquadModal from '../OpponentSquadModal';
 import MatchDetailModal from '../MatchDetailModal';
+import CountUp from '../CountUp';
 import type { LeaderboardRow, MatchRecord, SeasonHistoryEntry, SeasonStatus, TopAssisterRow, TopScorerRow } from '../../types';
 
 type SubTab = 'board' | 'top' | 'perf' | 'hof';
+
+// 상위 3위는 메달 이모지, 그 아래는 숫자 — 리더보드/득점왕·도움왕/시즌
+// TOP5 세 곳 모두 같은 기준을 쓴다.
+function rankLabel(i: number): string {
+  return i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`;
+}
 
 export default function RankTab() {
   const [sub, setSub] = useState<SubTab>('board');
@@ -87,11 +94,11 @@ function BoardSub({ onViewSquad }: { onViewSquad: (username: string) => void }) 
             <tbody>
               {leaderboard.map((row, i) => (
                 <tr key={row.username} style={row.username === me.username ? { color: 'var(--gold)' } : undefined}>
-                  <td>{i + 1}</td>
+                  <td>{rankLabel(i)}</td>
                   <td>
                     {row.clubName} <span className="dim small-text">({row.username})</span>
                   </td>
-                  <td className="num">{row.points}</td>
+                  <td className="num">{row.username === me.username ? <CountUp value={row.points} /> : row.points}</td>
                   <td>
                     {row.record.w}-{row.record.d}-{row.record.l}
                   </td>
@@ -253,7 +260,7 @@ function HallOfFameSub() {
     return (
       <li key={row.username + row.playerId} style={row.username === me.username ? { color: 'var(--gold)' } : undefined}>
         <span>
-          #{rank} {p ? p.name : row.playerId}{' '}
+          {rankLabel(rank - 1)} {p ? p.name : row.playerId}{' '}
           <span className="dim small-text">
             ({row.clubName} · {row.username})
           </span>
@@ -316,10 +323,15 @@ function TeamRecordSub() {
   return (
     <div id="team-record">
       <div className="season-banner">
-        <div>
-          <span className="season-num">시즌 {season.number}</span>
+        <div className="season-banner-top">
+          <div>
+            <span className="season-num">시즌 {season.number}</span>
+          </div>
+          <div className="dim">{season.daysRemaining}일 후 시즌 종료 (30일 주기)</div>
         </div>
-        <div className="dim">{season.daysRemaining}일 후 시즌 종료 (30일 주기)</div>
+        <div className="poss-bar season-progress-bar">
+          <div className="poss-home" style={{ width: `${Math.max(0, Math.min(100, ((30 - season.daysRemaining) / 30) * 100))}%` }} />
+        </div>
       </div>
       <div className="team-grid">
         <div className="team-block">
@@ -345,9 +357,9 @@ function TeamRecordSub() {
           <h4>이번 시즌 TOP 5</h4>
           <ol className="mini-board">
             {top5.length ? (
-              top5.map((r) => (
+              top5.map((r, i) => (
                 <li key={r.username} style={r.username === me.username ? { color: 'var(--gold)' } : undefined}>
-                  {r.clubName} <span className="dim small-text">({r.username})</span> — {r.points}점
+                  {rankLabel(i)} {r.clubName} <span className="dim small-text">({r.username})</span> — {r.points}점
                 </li>
               ))
             ) : (

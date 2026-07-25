@@ -11,6 +11,7 @@ import EnhanceModal from '../EnhanceModal';
 import ClubChangeModal from '../ClubChangeModal';
 import PlayerDetailModal from '../PlayerDetailModal';
 import SbcChallenges from '../SbcChallenges';
+import CountUp from '../CountUp';
 import type { CatalogPlayer, Ratings, Role, Squad } from '../../types';
 
 // 드래그 시작 후 이 거리(px)를 넘게 움직여야 "드래그"로 인정한다 — 그 전까지는
@@ -31,23 +32,42 @@ function InfoIcon() {
   );
 }
 
+// OVR만 골드로 강조하던 걸 나머지 라인 스탯에도 확장 — 값대에 따라
+// 색으로 즉시 강약을 읽을 수 있게(고득점 그린, 저득점 레드, 중간은 기본색).
+function ratingTier(v: number): string {
+  if (v >= 85) return 'rc-hi';
+  if (v < 60) return 'rc-lo';
+  return '';
+}
+
 function RatingsBar({ ratings }: { ratings: Ratings }) {
-  const cells: [string, string | number, string?][] = [
+  const statCells: [string, number][] = [
     ['공격', ratings.ATT],
     ['미드필드', ratings.MID],
     ['수비', ratings.DEF],
     ['GK', ratings.GK],
-    ['케미', ratings.chemistry + '%'],
-    ['OVR', ratings.OVR, 'ovr'],
   ];
   return (
     <div id="ratings-bar">
-      {cells.map(([label, value, cls]) => (
-        <div key={label} className={`rating-cell ${cls || ''}`}>
+      {statCells.map(([label, value]) => (
+        <div key={label} className={`rating-cell ${ratingTier(value)}`}>
           <div className="rc-label">{label}</div>
           <div className="rc-value">{value}</div>
         </div>
       ))}
+      <div className="rating-cell">
+        <div className="rc-label">케미</div>
+        <div className="rc-value">{ratings.chemistry}%</div>
+        <div className="rc-chem-bar">
+          <div className="rc-chem-fill" style={{ width: `${ratings.chemistry}%` }} />
+        </div>
+      </div>
+      <div className="rating-cell ovr">
+        <div className="rc-label">OVR</div>
+        <div className="rc-value">
+          <CountUp value={ratings.OVR} />
+        </div>
+      </div>
     </div>
   );
 }

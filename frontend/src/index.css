@@ -494,6 +494,30 @@ input:focus, select:focus { border-color: var(--blue); }
 .tier-ultra .fc-ovr { color: #ff5f5f; }
 .tier-ultra .fc-name { border-top-color: rgba(0,0,0,.2); }
 
+/* 유휴 포일 샤인 — 팩 리빌 순간(cardFlipIn)을 벗어나면 카드가 완전히
+   정적이었다. 상위 등급(gold/special/ultra)에만 은은한 대각선 광택이
+   주기적으로 스쳐 지나가게 해 "고급 카드"의 상시 존재감을 준다 — 낮은
+   등급(bronze/silver)은 절제해 등급 간 위계를 유지한다. .fut-card가 이미
+   overflow:hidden이라 카드 모서리 밖으로 새지 않는다. */
+.tier-gold::after, .tier-special::after, .tier-ultra::after {
+  content: '';
+  position: absolute;
+  top: -60%; left: -60%;
+  width: 40%; height: 220%;
+  background: linear-gradient(115deg, transparent 0%, rgba(255,255,255,.55) 50%, transparent 100%);
+  z-index: 1;
+  pointer-events: none;
+  animation: cardShine 4.5s ease-in-out infinite;
+}
+@keyframes cardShine {
+  0%, 18% { left: -60%; opacity: 0; }
+  28% { opacity: .9; }
+  48%, 100% { left: 130%; opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tier-gold::after, .tier-special::after, .tier-ultra::after { animation: none; display: none; }
+}
+
 .fc-head { position: absolute; top: 7px; left: 8px; text-align: center; line-height: 1.05; z-index: 2; }
 .fc-ovr { display: block; font-weight: 900; }
 .fc-pos { display: block; font-weight: 700; opacity: .75; }
@@ -604,6 +628,16 @@ input:focus, select:focus { border-color: var(--blue); }
 .rating-cell .rc-label { font-size: 11px; color: var(--dim); font-weight: 700; }
 .rating-cell .rc-value { font-size: 18px; font-weight: 800; }
 .rating-cell.ovr .rc-value { color: var(--gold); }
+.rating-cell.rc-hi .rc-value { color: var(--green); }
+.rating-cell.rc-lo .rc-value { color: var(--red); }
+/* 케미 % 밑에 붙는 미니 진행도 바 — .poss-bar와 같은 두께/트랜지션
+   컨벤션, 색만 레드→골드→그린 그라디언트로 잡아 낮을수록 붉게, 높을수록
+   푸르지 않고 초록으로 읽히게 한다(축구 특성상 "좋음=초록"이 직관적). */
+.rc-chem-bar { margin-top: 5px; height: 4px; border-radius: 999px; background: var(--panel2); overflow: hidden; }
+.rc-chem-fill {
+  height: 100%; border-radius: 999px; transition: width .4s ease;
+  background: linear-gradient(90deg, var(--red), var(--gold), var(--green));
+}
 
 .owned-col h3 { margin-bottom: 10px; }
 #owned-list {
@@ -615,9 +649,18 @@ input:focus, select:focus { border-color: var(--blue); }
 /* ===== market ===== */
 .market-toolbar { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; align-items: center; }
 .market-toolbar input { flex: 1; min-width: 160px; }
-.check-label { font-size: 13px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
-/* 툴바의 input flex:1 규칙이 체크박스까지 늘리지 않도록 */
-.check-label input { flex: 0 0 auto; min-width: 0; width: auto; }
+/* 체크박스 대신 필 토글 버튼 — 다른 화면의 .chip/.role-chip과 같은 톤. */
+.chip-toggle {
+  background: var(--panel2); border: 1px solid var(--border); color: var(--dim);
+  border-radius: 999px; padding: 7px 14px; font-size: 12px; font-weight: 700;
+  white-space: nowrap; flex-shrink: 0;
+}
+.chip-toggle.active { background: var(--green-soft); border-color: var(--green); color: #fff; }
+.market-owned-badge {
+  display: inline-block; align-self: center;
+  background: var(--green-soft); color: #fff; border-radius: 999px;
+  padding: 4px 14px; font-size: 11px; font-weight: 800;
+}
 #market-list {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
   gap: 14px;
@@ -891,7 +934,10 @@ input:focus, select:focus { border-color: var(--blue); }
 .news-badge.breaking { background: rgba(220,60,60,.18); color: #ff6b6b; }
 .news-badge.video { background: rgba(90,130,255,.18); color: #7fa2ff; }
 .news-badge.radio { background: rgba(180,140,255,.18); color: #c3a6ff; }
-.news-item .news-teams { font-weight: 700; }
+/* 예측 탭과 동일한 팀 로고를 보여주기 위해 .fx-team/.fx-vs를 재사용 —
+   화면 간 시각 정합성. */
+.news-item .news-teams { font-weight: 700; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.news-item .news-teams .fx-vs { font-weight: 900; }
 .news-item .news-blurb { font-size: 12.5px; color: var(--dim); }
 .news-item .news-date { font-size: 12px; color: var(--dim); flex-shrink: 0; }
 .news-detail-hint { align-self: flex-end; }
@@ -1220,7 +1266,23 @@ input:focus, select:focus { border-color: var(--blue); }
 .fx-pick.picked { background: var(--green-soft); border-color: var(--green); }
 .fx-score-in { width: 52px; text-align: center; padding: 8px 6px; }
 .fx-bet-tag { font-size: 12px; color: var(--blue); font-weight: 700; }
-.fx-reward { font-size: 13px; color: var(--gold); font-weight: 800; }
+/* 팩 개봉의 코인 리빌(#coins-reveal-*)과 같은 "골드 숫자 + 코인" 언어를
+   빌려오되, 여기는 목록 안 인라인 항목이라 전체 화면 모달 대신 짧은
+   팝인 펄스로 축소했다. */
+.fx-reward {
+  font-size: 13px; color: var(--gold); font-weight: 800;
+  display: inline-flex; align-items: center; gap: 3px;
+  animation: fxRewardPop .5s cubic-bezier(.2,.9,.3,1.3);
+}
+.fx-reward::before { content: '🪙'; }
+@keyframes fxRewardPop {
+  0% { transform: scale(.5); opacity: 0; }
+  65% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-reward { animation: none; }
+}
 .fx-score.fx-live { color: var(--green); }
 .fx-live-min {
   color: var(--green); font-weight: 800;
@@ -1247,11 +1309,15 @@ input:focus, select:focus { border-color: var(--blue); }
 
 /* ===== 팀 성적 (시즌) ===== */
 .season-banner {
-  display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px;
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
   padding: 14px 18px; margin-bottom: 16px;
 }
+.season-banner-top { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px; }
 .season-num { font-size: 20px; font-weight: 900; color: var(--gold); }
+/* .poss-bar/.poss-home(대전 탭 점유율 바)를 그대로 재사용 — 시즌 테마에
+   맞게 색만 골드로. */
+.season-progress-bar { margin-top: 10px; }
+.season-progress-bar .poss-home { background: var(--gold); }
 .team-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
 .team-block {
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px;
@@ -1263,6 +1329,8 @@ input:focus, select:focus { border-color: var(--blue); }
 
 /* ===== 선수 불만 모달 ===== */
 #complaint-prompt { font-weight: 700; }
+.complaint-position-note { margin-top: 4px; }
+.complaint-pos-mismatch { color: var(--red); }
 #complaint-choices { display: flex; flex-direction: column; gap: 8px; }
 #complaint-card-col { display: flex; flex-direction: column; gap: 8px; align-items: center; }
 
@@ -1317,7 +1385,14 @@ input:focus, select:focus { border-color: var(--blue); }
   background: var(--panel2); border: 1px solid var(--border); color: var(--dim);
   border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700;
 }
-.role-chip.active { color: var(--text); border-color: var(--blue); background: rgba(88,166,255,.15); }
+/* 평평한 파란 틴트 대신 카드 등급 언어(골드 그라디언트)를 재사용해
+   "선택됨"이 다른 등급/보상 표시와 같은 톤으로 눈에 띄게 한다. */
+.role-chip.active {
+  color: #3b2d0a; border-color: transparent;
+  background: linear-gradient(135deg, #f7e7a8 0%, #e8cd6f 50%, #c39b3f 100%);
+  box-shadow: 0 0 8px rgba(227, 179, 65, .5);
+  font-weight: 800;
+}
 
 /* ===== 주장/부주장 ===== */
 .captain-toolbar { align-items: center; gap: 8px; margin-top: 8px; }
@@ -1338,13 +1413,26 @@ input:focus, select:focus { border-color: var(--blue); }
 #toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: var(--panel2); border: 1px solid var(--border);
-  border-radius: 10px; padding: 12px 20px; font-weight: 700; font-size: 14px;
+  border-radius: 999px; padding: 12px 22px; font-weight: 700; font-size: 14px;
   z-index: 100; box-shadow: 0 6px 20px rgba(0,0,0,.5);
   /* 요청: "토스트의 가로 길이를 적당히 조금 더 늘려줘" — 기존엔 폭 제한이
      아예 없어(shrink-to-fit) 판매/강화 완료처럼 조금 긴 메시지가 좁게
      줄바꿈됐다. 뷰포트를 넘지 않는 선에서 조금 더 넓게 잡는다. */
   max-width: min(94vw, 440px);
   text-align: center;
+  /* 게이미피케이션 톤 통일 — 다른 패널/칩과 같은 팝인 리듬(resultPop과
+     같은 스프링감, 다만 작은 요소라 더 짧게). .hidden(display:none)에서
+     보이는 상태로 바뀔 때만 트리거된다 — 이미 떠 있는 토스트에 새 메시지가
+     덮어써지는 경우엔(2200ms 타이머 리셋) 재생되지 않지만, 그 정도로도
+     충분하고 매 문구 변경마다 다시 튀는 건 오히려 산만하다. */
+  animation: toastPop .3s cubic-bezier(.2,.9,.3,1.2);
+}
+@keyframes toastPop {
+  0% { transform: translateX(-50%) translateY(10px) scale(.9); opacity: 0; }
+  100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #toast { animation: none; }
 }
 /* 요청: "바텀 네비게이션 위에 above하게 떠주고 (모바일 버전)" — #main-tabs가
    모바일에서 하단 고정 바(높이 약 50~70px + safe-area)로 바뀌는데, 토스트의
@@ -1488,7 +1576,17 @@ input:focus, select:focus { border-color: var(--blue); }
 }
 .sbc-preview.ok { color: var(--green); background: rgba(46, 160, 67, .12); }
 .sbc-preview.no { color: var(--red); }
-.sbc-picker-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+/* 요청: "카드 선택 팝업이 조금 안 맞는데 3개 그리드를 중앙 2개 그리드로" —
+   auto-fill이 카드(56px) 대비 폭을 너무 좁게(76px) 잡아 3열로 빽빽하게
+   나왔다. 2열 고정 + justify-content:center로 좌우 여백을 주고 가운데
+   정렬한다. */
+.sbc-picker-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(90px, 130px));
+  justify-content: center;
+  justify-items: center;
+  gap: 12px;
+}
 .sbc-picker-item { background: none; border: none; padding: 0; cursor: pointer; }
 /* 아이폰15 기준 — 오버레이(16px) + 빌더(20px) 패딩을 빼면 콘텐츠 폭이
    321px 정도라 4열도 기술적으로는 들어가지만(.fut-card.sz-xs가 56px),
@@ -1501,11 +1599,20 @@ input:focus, select:focus { border-color: var(--blue); }
 /* ===== 소셜: 친구/길드 (정보 탭 서브뷰) ===== */
 .subtab-badge-wrap { position: relative; display: inline-block; padding-right: 2px; }
 .social-add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+/* font-size는 전역 input 규칙(16px, 위 :69 근처)을 그대로 둔다 — 13px로
+   낮췄더니 iOS Safari가 이 인풋에 포커스될 때마다 페이지 전체를 확대해
+   버려서("에딧텍스트가 짤린다"는 리포트의 실제 원인) 16px 미만이면
+   자동 확대되는 iOS 임계값을 건드렸다. .owned-controls input과 같은
+   패딩만 좁히는 패턴을 따른다. */
 .social-add-row input {
-  flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 10px; color: var(--text); font-size: 13px;
+  flex: 1; min-width: 0; padding: 8px 10px;
 }
 .social-req-actions { display: flex; gap: 6px; flex-shrink: 0; }
+/* 받은/보낸 요청 .team-block 두 개가 grid(.team-grid, 다른 화면에서
+   .team-block을 쓰는 방식)가 아니라 그냥 세로로 쌓인 형제라 gap이 전혀
+   없어 딱 붙어 보였다 — 공용 .team-block에 margin을 얹으면 grid 컨텍스트
+   (RankTab)의 gap과 겹쳐 간격이 이상해지므로, 여기서만 감싸는 래퍼로 준다. */
+.social-request-blocks { display: flex; flex-direction: column; gap: 12px; }
 /* 길드 생성 폼(이름+태그+버튼)이 한 줄에 3개라 좁은 화면에서 눌린다 —
    세로로 스택. 친구 요청 폼(입력 1개+버튼)은 원래도 문제없지만 같은
    규칙을 적용해도 자연스럽게 유지된다. */

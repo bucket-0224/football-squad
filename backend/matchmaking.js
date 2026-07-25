@@ -856,6 +856,12 @@ function attach(server) {
       awayUserId: away.user ? away.user.id : null,
       homeName: home.name,
       awayName: away.name,
+      // 뉴스 피드(NewsTab)가 팀 로고를 보여줄 수 있도록 — clubName은
+      // 유저가 자유롭게 정한 표시명이라 players.TEAMS로 역매핑이 안 되므로,
+      // 매치 시작 시점에 이미 계산해둔 로고(teamLogo(baseTeam))를 그대로
+      // 기록에 남긴다.
+      homeLogo: home.logo || null,
+      awayLogo: away.logo || null,
       score,
       possession: result.possession,
       xg: result.xg,

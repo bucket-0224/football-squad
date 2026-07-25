@@ -333,6 +333,8 @@ export interface MatchRecord {
   awayUserId: string | null;
   homeName: string;
   awayName: string;
+  homeLogo?: string | null;
+  awayLogo?: string | null;
   score: { home: number; away: number };
   possession?: { home: number; away: number };
   xg?: { home: number; away: number };

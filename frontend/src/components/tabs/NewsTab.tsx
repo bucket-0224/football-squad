@@ -43,6 +43,16 @@ function newsBlurb(
   return line;
 }
 
+// 예측 탭(FixtureTeam)과 같은 로고+이름 조합 — 두 화면 간 시각적 정합성.
+function NewsTeam({ name, logo, bold }: { name: string; logo?: string | null; bold?: boolean }) {
+  return (
+    <span className="fx-team">
+      {logo ? <img src={logo} alt="" onError={(e) => e.currentTarget.remove()} /> : null}
+      {bold ? <b>{name}</b> : name}
+    </span>
+  );
+}
+
 export default function NewsTab() {
   const [matches, setMatches] = useState<MatchRecord[]>([]);
   const [detailId, setDetailId] = useState<string | null>(null);
@@ -61,20 +71,16 @@ export default function NewsTab() {
           const winner = m.score.home === m.score.away ? null : m.score.home > m.score.away ? 'home' : 'away';
           const home = m.homeName;
           const away = m.awayName;
-          const teams =
-            winner === 'home' ? (
-              <>
-                <b>{home}</b> {m.score.home} - {m.score.away} {away}
-              </>
-            ) : winner === 'away' ? (
-              <>
-                {home} {m.score.home} - {m.score.away} <b>{away}</b>
-              </>
-            ) : (
-              <>
-                {home} {m.score.home} - {m.score.away} {away} (무승부)
-              </>
-            );
+          const teams = (
+            <>
+              <NewsTeam name={home} logo={m.homeLogo} bold={winner === 'home'} />
+              <span className="fx-vs">
+                {m.score.home} - {m.score.away}
+              </span>
+              <NewsTeam name={away} logo={m.awayLogo} bold={winner === 'away'} />
+              {winner === null && <span className="dim small-text">(무승부)</span>}
+            </>
+          );
           const fmt = newsFormatFor(m.id);
           const winnerName = winner === 'home' ? home : winner === 'away' ? away : null;
           const loserName = winner === 'home' ? away : winner === 'away' ? home : null;
