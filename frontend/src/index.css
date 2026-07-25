@@ -1411,3 +1411,78 @@ input:focus, select:focus { border-color: var(--blue); }
 .spec-row .spec-names { flex: 1; min-width: 0; }
 .spec-row button { flex-shrink: 0; }
 .spec-tag { color: var(--gold); font-weight: 800; }
+
+/* ===== 컵대회 (대전 탭 서브뷰) ===== */
+.match-mode-tabs { flex-basis: 100%; max-width: 460px; }
+.cup-lobby-card { max-width: 460px; }
+.cup-bracket { display: flex; gap: 8px; margin: 4px 0; }
+.cup-node {
+  flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 10px 8px; display: flex; flex-direction: column;
+  align-items: center; gap: 6px; text-align: center;
+}
+.cup-node-round { font-size: 11px; font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+.cup-node-opp { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 40px; justify-content: center; }
+.cup-node-opp img { width: 28px; height: 28px; object-fit: contain; }
+.cup-node-opp-fallback { font-size: 20px; }
+.cup-node-opp-name { font-size: 11px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.cup-node-opp-ovr { font-size: 10px; color: var(--dim); }
+.cup-node-current { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold); }
+.cup-node-current .cup-node-round { color: var(--gold); }
+.cup-node-win { border-color: var(--green); }
+.cup-node-win .cup-node-round { color: var(--green); }
+.cup-node-lost { border-color: var(--red); opacity: .75; }
+.cup-node-lost .cup-node-round { color: var(--red); }
+.cup-node-upcoming { opacity: .55; }
+
+/* 컵대회 우승 리빌 — 팩 개봉 리빌(#cere-sparks/.cere-spark, 위 참고)과 같은
+   파티클 애니메이션을 재사용해 트로피 이모지 주위에 한 번만 터뜨린다. */
+.cup-champion-fx { position: relative; height: 90px; display: flex; align-items: center; justify-content: center; }
+.cup-champion-sparks { position: absolute; inset: 0; pointer-events: none; }
+.cup-trophy-emoji { font-size: 56px; animation: cardFlipIn .8s cubic-bezier(.2,.8,.3,1); filter: drop-shadow(0 0 18px rgba(227,179,65,.6)); }
+.cup-result-note { display: inline-block; margin-top: 4px; font-weight: 700; color: var(--gold); }
+
+/* ===== SBC 챌린지 (스쿼드 탭 서브뷰) ===== */
+.sbc-banner { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.sbc-challenge-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.sbc-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px; display: flex; flex-direction: column; gap: 8px;
+}
+.sbc-card.done { border-color: var(--green); opacity: .8; }
+.sbc-card-label { font-weight: 800; }
+.sbc-card-reward { color: var(--gold); font-weight: 800; font-size: 13px; }
+.sbc-card-done-badge {
+  align-self: flex-start; background: var(--green-soft); color: #fff; border-radius: 999px;
+  padding: 3px 10px; font-size: 11px; font-weight: 800;
+}
+.sbc-builder-overlay, .sbc-picker-overlay {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, .72);
+  display: flex; align-items: center; justify-content: center; z-index: 80; padding: 16px;
+}
+.sbc-picker-overlay { z-index: 90; }
+.sbc-builder, .sbc-picker {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; max-width: 480px; width: 100%; max-height: 86vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.sbc-builder-head, .sbc-picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.sbc-slots { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; justify-items: center; }
+.sbc-slot { background: none; border: none; padding: 0; cursor: pointer; }
+.sbc-preview {
+  border-radius: 10px; padding: 8px 12px; font-size: 13px; font-weight: 700;
+  background: var(--panel2); color: var(--dim); text-align: center;
+}
+.sbc-preview.ok { color: var(--green); background: rgba(46, 160, 67, .12); }
+.sbc-preview.no { color: var(--red); }
+.sbc-picker-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 8px; }
+.sbc-picker-item { background: none; border: none; padding: 0; cursor: pointer; }
+
+/* ===== 소셜: 친구/길드 (정보 탭 서브뷰) ===== */
+.subtab-badge-wrap { position: relative; display: inline-block; padding-right: 2px; }
+.social-add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.social-add-row input {
+  flex: 1; min-width: 0; background: var(--panel2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; color: var(--text); font-size: 13px;
+}
+.social-req-actions { display: flex; gap: 6px; flex-shrink: 0; }

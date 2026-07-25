@@ -13,6 +13,7 @@ const DEFAULT_DB = {
   matches: [], // recent match records (capped)
   season: { number: 1, startedAt: Date.now() },
   seasonHistory: [], // past season snapshots (capped)
+  guilds: {},  // id -> guild (backend/guild.js)
 };
 
 let db = null;
@@ -28,6 +29,7 @@ function load() {
     if (!db.matches) db.matches = [];
     if (!db.season) db.season = { number: 1, startedAt: Date.now() };
     if (!db.seasonHistory) db.seasonHistory = [];
+    if (!db.guilds || typeof db.guilds !== 'object') db.guilds = {};
     // per-user migration guard: accounts created before a field existed
     // (complaints/transferRequests/devotion/mailbox all postdate the
     // original schema) would otherwise be missing it entirely — and an
@@ -42,6 +44,11 @@ function load() {
       if (!Array.isArray(u.mailbox)) u.mailbox = [];
       if (typeof u.lastComplaintCheck !== 'number') u.lastComplaintCheck = 0;
       if (typeof u.lastTransferCheck !== 'number') u.lastTransferCheck = 0;
+      if (!Array.isArray(u.friends)) u.friends = [];
+      if (!u.friendRequests || typeof u.friendRequests !== 'object') {
+        u.friendRequests = { incoming: [], outgoing: [] };
+      }
+      if (u.guildId === undefined) u.guildId = null;
     });
   } catch (err) {
     db = JSON.parse(JSON.stringify(DEFAULT_DB));
@@ -118,6 +125,34 @@ function normalizeUser(u) {
   if (!Array.isArray(u.transferRequests)) u.transferRequests = [];
   if (!u.lastTransferCheck) u.lastTransferCheck = 0;
   if (!Array.isArray(u.mailbox)) u.mailbox = []; // 관리자 보상 우편함
+
+  if (!Array.isArray(u.friends)) u.friends = []; // 수락된 친구 userId 목록
+  if (!u.friendRequests || typeof u.friendRequests !== 'object') {
+    u.friendRequests = { incoming: [], outgoing: [] };
+  }
+  if (!Array.isArray(u.friendRequests.incoming)) u.friendRequests.incoming = [];
+  if (!Array.isArray(u.friendRequests.outgoing)) u.friendRequests.outgoing = [];
+  if (u.guildId === undefined) u.guildId = null;
+
+  // 컵대회(단판 토너먼트) 진행 상태 — backend/matchmaking.js의 startCup/finishCupMatch 참고.
+  if (!u.cup || typeof u.cup !== 'object') {
+    u.cup = { active: false, round: 0, wins: 0, opponents: [], status: 'idle', lastRunDate: null, lastMatchId: null };
+  }
+  if (!Array.isArray(u.cup.opponents)) u.cup.opponents = [];
+
+  // SBC(스쿼드 챌린지) 완료 기록 — key는 `${dateKey}:${templateId}`라 날짜가 지나면
+  // 자연히 새 챌린지가 되므로, 오래된 키만 주기적으로 정리해 무한 증식을 막는다
+  // (backend/game/sbc.js 참고).
+  if (!u.sbc || typeof u.sbc !== 'object') u.sbc = { completed: {} };
+  if (!u.sbc.completed || typeof u.sbc.completed !== 'object') u.sbc.completed = {};
+  const completedKeys = Object.keys(u.sbc.completed);
+  if (completedKeys.length > 60) {
+    completedKeys
+      .sort((a, b) => (u.sbc.completed[a] || 0) - (u.sbc.completed[b] || 0))
+      .slice(0, completedKeys.length - 60)
+      .forEach((k) => delete u.sbc.completed[k]);
+  }
+
   return u;
 }
 
@@ -212,6 +247,30 @@ function allUsers() {
   return Object.values(load().users);
 }
 
+// ---- guilds ----------------------------------------------------------------
+
+function getGuild(id) {
+  return (id && load().guilds[id]) || null;
+}
+
+function putGuild(guild) {
+  load().guilds[guild.id] = guild;
+  save();
+  return guild;
+}
+
+function deleteGuild(id) {
+  const d = load();
+  if (!d.guilds[id]) return false;
+  delete d.guilds[id];
+  save();
+  return true;
+}
+
+function allGuilds() {
+  return Object.values(load().guilds);
+}
+
 module.exports = {
   DB_FILE,
   get,
@@ -229,6 +288,10 @@ module.exports = {
   getSeasonHistory,
   pushSeasonHistory,
   allUsers,
+  getGuild,
+  putGuild,
+  deleteGuild,
+  allGuilds,
   save,
   flushNow,
 };

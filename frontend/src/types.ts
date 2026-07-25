@@ -51,6 +51,77 @@ export interface TransferRequest {
   createdAt: number;
 }
 
+// ---- 컵대회(토너먼트) ----
+
+export interface CupOpponent {
+  name: string;
+  ovr: number;
+  logo?: string | null;
+}
+
+export interface CupState {
+  active: boolean;
+  round: number; // 다음(또는 마지막으로 시도한) 라운드 인덱스 (0=8강,1=4강,2=결승)
+  wins: number;
+  opponents: CupOpponent[];
+  status: 'idle' | 'in_progress' | 'won' | 'eliminated';
+  lastRunDate: string | null;
+  lastMatchId: string | null;
+}
+
+// ---- SBC(스쿼드 챌린지) ----
+
+export interface SbcChallenge {
+  id: string; // `${dateKey}:${templateId}`
+  templateId: string;
+  label: string;
+  desc: string;
+  reward: { coins?: number };
+  completed: boolean;
+}
+
+// ---- 소셜: 친구/길드 ----
+
+export interface FriendRow {
+  id: string;
+  username: string;
+  clubName: string;
+  points: number;
+  record: { w: number; d: number; l: number };
+}
+
+export interface FriendsView {
+  friends: FriendRow[];
+  incoming: FriendRow[];
+  outgoing: FriendRow[];
+}
+
+export interface GuildMember {
+  id: string;
+  username: string;
+  clubName: string;
+  points: number;
+}
+
+export interface Guild {
+  id: string;
+  name: string;
+  tag: string;
+  ownerId: string;
+  createdAt: number;
+  members: GuildMember[];
+  pending: GuildMember[];
+  totalPoints: number;
+}
+
+export interface GuildListItem {
+  id: string;
+  name: string;
+  tag: string;
+  memberCount: number;
+  pendingCount: number;
+}
+
 export interface User {
   id: string;
   username: string;
@@ -75,6 +146,11 @@ export interface User {
   pvpSquad: Squad;
   ratings: Ratings;
   pvpRatings: Ratings;
+  cup: CupState;
+  sbc: { completed: Record<string, number> };
+  friends: string[];
+  friendRequests: { incoming: string[]; outgoing: string[] };
+  guildId: string | null;
 }
 
 export interface Team {

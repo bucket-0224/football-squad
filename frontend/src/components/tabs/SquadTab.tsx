@@ -10,6 +10,7 @@ import PickerModal from '../PickerModal';
 import EnhanceModal from '../EnhanceModal';
 import ClubChangeModal from '../ClubChangeModal';
 import PlayerDetailModal from '../PlayerDetailModal';
+import SbcChallenges from '../SbcChallenges';
 import type { CatalogPlayer, Ratings, Role, Squad } from '../../types';
 
 // 드래그 시작 후 이 거리(px)를 넘게 움직여야 "드래그"로 인정한다 — 그 전까지는
@@ -170,6 +171,7 @@ function clusterLineCounts(ys: number[]): number[] {
 
 export default function SquadTab() {
   const { me, squadMode, setSquadMode, bootstrap, catalog, saveSquad, autoPlaceSquad } = useAppStore();
+  const [view, setView] = useState<'edit' | 'sbc'>('edit');
   const [pickerSlot, setPickerSlot] = useState<number | null>(null);
   const [enhanceId, setEnhanceId] = useState<string | null>(null);
   const [clubChangeOpen, setClubChangeOpen] = useState(false);
@@ -386,6 +388,17 @@ export default function SquadTab() {
 
   return (
     <div id="tab-squad" className="tab-panel">
+      <div className="sub-tabs squad-view-tabs">
+        <button type="button" className={view === 'edit' ? 'active' : ''} onClick={() => setView('edit')}>
+          ⚽ 스쿼드 편집
+        </button>
+        <button type="button" className={view === 'sbc' ? 'active' : ''} onClick={() => setView('sbc')}>
+          🎯 챌린지
+        </button>
+      </div>
+      {view === 'sbc' && <SbcChallenges />}
+      {view === 'edit' && (
+        <>
       <div id="squad-mode">
         <button
           type="button"
@@ -532,6 +545,8 @@ export default function SquadTab() {
         </div>
         <OwnedList onEnhance={setEnhanceId} onDetail={setDetailId} />
       </div>
+        </>
+      )}
       {pickerSlot !== null && (
         <PickerModal
           slotIndex={pickerSlot}

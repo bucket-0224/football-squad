@@ -5,7 +5,7 @@ import { api } from '../../api/client';
 import { socket, type WsMessage } from '../../ws/socket';
 import { LiveMatchEngine, type MatchEvent, type MatchStartMsg, type ResultMsg } from '../../game/liveMatchEngine';
 import { upgradedCard } from '../../game/cards';
-import type { CatalogPlayer, User } from '../../types';
+import type { CatalogPlayer, CupState, User } from '../../types';
 
 interface SpectateRow {
   id: string;
@@ -37,6 +37,81 @@ const FEED_KIND: Record<string, string> = {
   live: 'info',
 };
 
+const CUP_ROUND_LABELS = ['8강', '4강', '결승'];
+
+// 컵대회 우승 리빌 파티클 — PacksTab의 팩 개봉 리빌(#cere-sparks/.cere-spark,
+// index.css)과 같은 CSS 애니메이션을 재사용해, 개봉 단계 로직 없이 트로피
+// 주위에 한 번만 터뜨린다.
+function cupSparks(n = 14) {
+  return Array.from({ length: n }, (_, i) => {
+    const angle = (i / n) * Math.PI * 2;
+    const dist = 60 + Math.random() * 36;
+    return {
+      dx: Math.cos(angle) * dist,
+      dy: Math.sin(angle) * dist,
+      delay: `${(i % 5) * 0.08}s`,
+      color: i % 2 ? '#e3b341' : '#fff3c4',
+    };
+  });
+}
+
+// 컵대회 로비 — 대전 탭 내부 서브 뷰(새 최상위 탭이 아님). 진행 상태는
+// me.cup(백엔드가 sanitizeUser로 노출)을 그대로 읽는다: 매치 결과 팝업이
+// 닫힐 때마다 handleResult가 /api/me를 다시 불러오므로 별도 폴링이 필요
+// 없다.
+function CupBracket({
+  cup,
+  onStart,
+  disabled,
+}: {
+  cup: CupState;
+  onStart: () => void;
+  disabled: boolean;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const inProgress = cup.status === 'in_progress';
+  const canStartFresh = cup.lastRunDate !== today;
+  const startDisabled = disabled || (!inProgress && !canStartFresh);
+
+  let statusLine = '8강부터 결승까지 3연승하면 우승 — 하루 1회 새로 도전할 수 있습니다.';
+  if (inProgress) statusLine = `${CUP_ROUND_LABELS[cup.round]} 진출 — 다음 경기를 시작하세요.`;
+  else if (cup.status === 'won') statusLine = '🏆 지난 컵대회 우승! ' + (canStartFresh ? '오늘 다시 도전할 수 있습니다.' : '내일 다시 도전할 수 있습니다.');
+  else if (cup.status === 'eliminated') statusLine = `${CUP_ROUND_LABELS[cup.round]}에서 탈락했습니다. ` + (canStartFresh ? '오늘 다시 도전할 수 있습니다.' : '내일 다시 도전할 수 있습니다.');
+
+  return (
+    <div className="lobby-card cup-lobby-card">
+      <h2>🏆 컵대회</h2>
+      <p className="dim small-text">{statusLine}</p>
+      <div className="cup-bracket">
+        {CUP_ROUND_LABELS.map((label, i) => {
+          const opp = cup.opponents[i];
+          let state: 'win' | 'current' | 'lost' | 'upcoming' = 'upcoming';
+          if (i < cup.round) state = 'win';
+          else if (i === cup.round && cup.status === 'eliminated') state = 'lost';
+          else if (i === cup.round && inProgress) state = 'current';
+          return (
+            <div key={label} className={`cup-node cup-node-${state}`}>
+              <div className="cup-node-round">{label}</div>
+              {opp ? (
+                <div className="cup-node-opp">
+                  {opp.logo ? <img src={opp.logo} alt="" /> : <span className="cup-node-opp-fallback">⚽</span>}
+                  <span className="cup-node-opp-name">{opp.name}</span>
+                  <span className="cup-node-opp-ovr">OVR {opp.ovr}</span>
+                </div>
+              ) : (
+                <div className="cup-node-opp dim small-text">미정</div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <button type="button" className="btn primary big" disabled={startDisabled} onClick={onStart}>
+        {inProgress ? `${CUP_ROUND_LABELS[cup.round]} 경기 시작` : '컵대회 도전 시작'}
+      </button>
+    </div>
+  );
+}
+
 function LiveMatchCanvas({ engine }: { engine: LiveMatchEngine }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -50,6 +125,7 @@ function LiveMatchCanvas({ engine }: { engine: LiveMatchEngine }) {
 export default function MatchTab({ visible }: { visible: boolean }) {
   const { me, bootstrap, catalog, token } = useAppStore();
   const [view, setView] = useState<'lobby' | 'live'>('lobby');
+  const [matchMode, setMatchMode] = useState<'quick' | 'cup'>('quick');
   const [queued, setQueued] = useState(false);
   const [matchError, setMatchError] = useState('');
   const [spectateList, setSpectateList] = useState<SpectateRow[]>([]);
@@ -342,6 +418,11 @@ export default function MatchTab({ visible }: { visible: boolean }) {
     sendWs({ type: 'queue_ai' });
   };
 
+  const onQueueCup = () => {
+    setMatchError('');
+    sendWs({ type: 'queue_cup' });
+  };
+
   // ---- pause panel (작전 타임 substitution) ----
   const pauseSlots = bootstrap?.formations[pauseFormation] || [];
   const pausePool = (me?.[poolKind === 'drawn' ? 'drawn' : 'owned'] || []) as string[];
@@ -416,32 +497,53 @@ export default function MatchTab({ visible }: { visible: boolean }) {
         </div>
       )}
       <div id="match-lobby" className={view === 'lobby' ? '' : 'hidden'}>
-        <div className="lobby-card">
-          <h2>⚔️ 실시간 대전</h2>
-          <p className="dim">경기는 스탯 기반으로 시뮬레이션되며, 90분이 탑뷰 실시간 중계로 재생됩니다.</p>
-          <div className="lobby-buttons">
-            <button type="button" className="btn primary big" disabled={queued} onClick={onQueue}>
-              랭크 매치 (유저 대전)
-            </button>
-            <p className="dim small-text">
-              랭크 매치는 <b>실전 스쿼드</b>(뽑기로 획득한 카드)로 진행됩니다.
-            </p>
-            <button type="button" className="btn big" disabled={queued} onClick={onQueueAi}>
-              클럽팀 상대 연습 경기 (AI)
-            </button>
-            <p className="dim small-text">연습 경기는 클럽 스쿼드로 진행되며, 상대는 무작위 클럽팀입니다.</p>
-          </div>
-          <div id="queue-status" className={queued ? '' : 'hidden'}>
-            <div className="spinner" />
-            <span>상대를 찾는 중...</span>
-            <button type="button" className="btn ghost small" onClick={() => sendWs({ type: 'cancel' })}>
-              취소
-            </button>
-          </div>
-          <div id="match-error" className="error-msg">
-            {matchError}
-          </div>
+        <div className="sub-tabs match-mode-tabs">
+          <button
+            type="button"
+            className={matchMode === 'quick' ? 'active' : ''}
+            onClick={() => setMatchMode('quick')}
+          >
+            ⚔️ 빠른 대전
+          </button>
+          <button type="button" className={matchMode === 'cup' ? 'active' : ''} onClick={() => setMatchMode('cup')}>
+            🏆 컵대회
+          </button>
         </div>
+        {matchMode === 'quick' ? (
+          <div className="lobby-card">
+            <h2>⚔️ 실시간 대전</h2>
+            <p className="dim">경기는 스탯 기반으로 시뮬레이션되며, 90분이 탑뷰 실시간 중계로 재생됩니다.</p>
+            <div className="lobby-buttons">
+              <button type="button" className="btn primary big" disabled={queued} onClick={onQueue}>
+                랭크 매치 (유저 대전)
+              </button>
+              <p className="dim small-text">
+                랭크 매치는 <b>실전 스쿼드</b>(뽑기로 획득한 카드)로 진행됩니다.
+              </p>
+              <button type="button" className="btn big" disabled={queued} onClick={onQueueAi}>
+                클럽팀 상대 연습 경기 (AI)
+              </button>
+              <p className="dim small-text">연습 경기는 클럽 스쿼드로 진행되며, 상대는 무작위 클럽팀입니다.</p>
+            </div>
+            <div id="queue-status" className={queued ? '' : 'hidden'}>
+              <div className="spinner" />
+              <span>상대를 찾는 중...</span>
+              <button type="button" className="btn ghost small" onClick={() => sendWs({ type: 'cancel' })}>
+                취소
+              </button>
+            </div>
+            <div id="match-error" className="error-msg">
+              {matchError}
+            </div>
+          </div>
+        ) : (
+          <>
+            {me.cup && <CupBracket cup={me.cup} onStart={onQueueCup} disabled={queued} />}
+            <div id="match-error" className="error-msg">
+              {matchError}
+            </div>
+          </>
+        )}
         <div className="lobby-card spectate-card">
           <h2>👀 관전</h2>
           <p className="dim small-text">진행 중인 다른 경기를 실시간으로 지켜볼 수 있습니다.</p>
@@ -602,6 +704,20 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           }}
         >
           <div className="result-modal">
+            {resultMsg.cup?.champion && (
+              <div className="cup-champion-fx">
+                <div className="cup-champion-sparks">
+                  {cupSparks().map((s, i) => (
+                    <span
+                      key={i}
+                      className="cere-spark"
+                      style={{ '--dx': s.dx + 'px', '--dy': s.dy + 'px', background: s.color, animationDelay: s.delay } as React.CSSProperties}
+                    />
+                  ))}
+                </div>
+                <div className="cup-trophy-emoji">🏆</div>
+              </div>
+            )}
             <div id="result-banner" className={resultMsg.outcome || ''}>
               {(resultMsg.outcome && RESULT_LABELS[resultMsg.outcome]) || '경기 종료'}
             </div>
@@ -618,6 +734,18 @@ export default function MatchTab({ visible }: { visible: boolean }) {
                 <>
                   <br />
                   보상: 🪙 {resultMsg.reward.coins.toLocaleString()} · 승점 +{resultMsg.reward.points}
+                </>
+              )}
+              {resultMsg.cup && (
+                <>
+                  <br />
+                  <span className="cup-result-note">
+                    {resultMsg.cup.champion
+                      ? '🏆 컵대회 우승! 골드팩 보상이 우편함에 도착했습니다.'
+                      : resultMsg.cup.advanced
+                      ? `🏆 ${CUP_ROUND_LABELS[resultMsg.cup.round]} 통과${resultMsg.cup.shootout ? ' (승부차기)' : ''} — 다음 라운드 진출!`
+                      : `🏆 ${CUP_ROUND_LABELS[resultMsg.cup.round]}에서 탈락했습니다${resultMsg.cup.shootout ? ' (승부차기 패)' : ''}.`}
+                  </span>
                 </>
               )}
             </div>

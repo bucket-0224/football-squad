@@ -67,6 +67,13 @@ export interface MatchStartMsg {
   score?: { home: number; away: number };
 }
 
+export interface CupMatchResult {
+  round: number;
+  advanced: boolean;
+  champion: boolean;
+  shootout: { winner: 'home' | 'away'; homeScore: number; awayScore: number } | null;
+}
+
 export interface ResultMsg {
   score: { home: number; away: number };
   outcome?: 'win' | 'loss' | 'draw';
@@ -76,6 +83,7 @@ export interface ResultMsg {
   possession: { home: number; away: number };
   reward?: { coins: number; points: number };
   finalMinute?: number;
+  cup?: CupMatchResult | null;
 }
 
 export interface LiveMatchCallbacks {

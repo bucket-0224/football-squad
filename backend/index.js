@@ -19,6 +19,9 @@ const devotion = require('./devotion');
 const mailbox = require('./mailbox');
 const account = require('./account');
 const event = require('./event');
+const sbc = require('./game/sbc');
+const social = require('./social');
+const guild = require('./guild');
 
 // rebuild dynamically fetched clubs so persisted player ids keep resolving,
 // then fill in team badges + re-fetch pre-v2 rosters in the background
@@ -131,6 +134,11 @@ function sanitizeUser(u) {
     pvpSquad: u.pvpSquad,
     ratings: ratingSummary(withUpgrades(u, u.squad)),
     pvpRatings: ratingSummary(withUpgrades(u, u.pvpSquad)),
+    cup: u.cup,
+    sbc: u.sbc,
+    friends: u.friends || [],
+    friendRequests: u.friendRequests || { incoming: [], outgoing: [] },
+    guildId: u.guildId || null,
   };
 }
 
@@ -799,6 +807,126 @@ app.post('/api/mailbox/claim', auth.authMiddleware, (req, res) => {
   }
   store.putUser(req.user);
   res.json({ user: sanitizeUser(req.user), mail: r.mail, packResults });
+});
+
+// ---- SBC(스쿼드 챌린지) -------------------------------------------------------
+// 카드 소모 없음: 보유 풀에서 조건을 만족하는 11명을 임시로 배치해 제출하면
+// 우편함으로 보상(backend/game/sbc.js 참고) — 실제 메인/실전 스쿼드는 그대로.
+
+app.get('/api/sbc', auth.authMiddleware, (req, res) => {
+  const dateKey = new Date().toISOString().slice(0, 10);
+  const challenges = sbc.todaysChallenges(dateKey).map((c) => ({
+    ...c,
+    completed: !!req.user.sbc.completed[c.id],
+  }));
+  res.json({ challenges, formation: sbc.SBC_FORMATION, slots: sbc.SBC_SLOTS });
+});
+
+app.post('/api/sbc/submit', auth.authMiddleware, (req, res) => {
+  const { challengeId, starters } = req.body || {};
+  const [dateKey, templateId] = String(challengeId || '').split(':');
+  if (!dateKey || !templateId) return bad(res, 400, '잘못된 챌린지입니다.');
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (dateKey !== todayKey) return bad(res, 400, '오늘의 챌린지가 아닙니다. 새로고침 후 다시 시도해주세요.');
+  if (req.user.sbc.completed[challengeId]) return bad(res, 400, '이미 완료한 챌린지입니다.');
+  const r = sbc.evaluate(req.user, templateId, starters);
+  if (r.error) return bad(res, 400, r.error);
+  if (!r.ok) return bad(res, 400, `조건을 아직 만족하지 않습니다. (${r.detail || ''})`);
+  const reward = r.template.reward || {};
+  const mail = mailbox.sendMail(req.user, {
+    coins: reward.coins || 0,
+    message: `🎯 SBC 챌린지 완료 — ${r.template.label}`,
+  });
+  req.user.sbc.completed[challengeId] = Date.now();
+  store.putUser(req.user);
+  res.json({ user: sanitizeUser(req.user), mail });
+});
+
+// ---- 소셜: 친구 ---------------------------------------------------------------
+
+app.get('/api/social/friends', auth.authMiddleware, (req, res) => {
+  res.json(social.friendsView(req.user));
+});
+
+app.post('/api/social/friend-request', auth.authMiddleware, (req, res) => {
+  const r = social.sendFriendRequest(req.user, (req.body || {}).username);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json(social.friendsView(req.user));
+});
+
+app.post('/api/social/friend-accept', auth.authMiddleware, (req, res) => {
+  const r = social.acceptFriendRequest(req.user, (req.body || {}).userId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json(social.friendsView(req.user));
+});
+
+app.post('/api/social/friend-decline', auth.authMiddleware, (req, res) => {
+  const r = social.declineFriendRequest(req.user, (req.body || {}).userId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json(social.friendsView(req.user));
+});
+
+app.post('/api/social/friend-cancel', auth.authMiddleware, (req, res) => {
+  const r = social.cancelFriendRequest(req.user, (req.body || {}).userId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json(social.friendsView(req.user));
+});
+
+app.post('/api/social/friend-remove', auth.authMiddleware, (req, res) => {
+  const r = social.removeFriend(req.user, (req.body || {}).userId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json(social.friendsView(req.user));
+});
+
+// ---- 소셜: 길드 (가입 신청 + 길드장 승인) ---------------------------------------
+
+app.get('/api/guild/mine', auth.authMiddleware, (req, res) => {
+  res.json({ guild: req.user.guildId ? guild.guildDetail(req.user.guildId) : null });
+});
+
+app.get('/api/guild/list', auth.authMiddleware, (req, res) => {
+  res.json({ guilds: guild.guildList() });
+});
+
+app.get('/api/guild/leaderboard', auth.authMiddleware, (req, res) => {
+  res.json({ leaderboard: guild.guildLeaderboard() });
+});
+
+app.post('/api/guild/create', auth.authMiddleware, (req, res) => {
+  const { name, tag } = req.body || {};
+  const r = guild.createGuild(req.user, name, tag);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ user: sanitizeUser(req.user), guild: r.guild });
+});
+
+app.post('/api/guild/request-join', auth.authMiddleware, (req, res) => {
+  const r = guild.requestJoin(req.user, (req.body || {}).guildId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ ok: true });
+});
+
+app.post('/api/guild/cancel-join', auth.authMiddleware, (req, res) => {
+  const r = guild.cancelJoin(req.user, (req.body || {}).guildId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ ok: true });
+});
+
+app.post('/api/guild/approve', auth.authMiddleware, (req, res) => {
+  const r = guild.approveJoin(req.user, (req.body || {}).userId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ guild: r.guild });
+});
+
+app.post('/api/guild/reject', auth.authMiddleware, (req, res) => {
+  const r = guild.rejectJoin(req.user, (req.body || {}).userId);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ ok: true });
+});
+
+app.post('/api/guild/leave', auth.authMiddleware, (req, res) => {
+  const r = guild.leaveGuild(req.user);
+  if (r.error) return bad(res, r.status, r.error);
+  res.json({ user: sanitizeUser(req.user) });
 });
 
 function timingSafeEqual(a, b) {

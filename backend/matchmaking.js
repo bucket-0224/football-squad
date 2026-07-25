@@ -9,6 +9,7 @@ const { FORMATIONS, DEFAULT_FORMATION, LINE, posPenalty } = require('./game/form
 const { simulateMatch, simulateRemainder, TACTICS } = require('./game/simulate');
 const { coordFor } = require('./game/bands');
 const { pickReferee } = require('./referees');
+const mailbox = require('./mailbox');
 
 // 경기 시작 전 심판 프리뷰 팝업에서 "시작" 버튼을 누를 때까지 실제 시뮬레이션
 // 틱을 미룬다. 상대(사람)가 안 눌러도 무한정 기다리지 않도록 안전장치로 이
@@ -33,6 +34,16 @@ const REWARDS = {
   pvp: { win: [500, 3], draw: [250, 1], loss: [120, 0] },
   ai: { win: [250, 1], draw: [120, 0], loss: [60, 0] },
 };
+
+// 컵대회: 8강(0)->4강(1)->결승(2) 3라운드 싱글 엘리미네이션. 라운드가 오를수록
+// 보상도 커진다 — 결승 우승은 코인/승점 외에 우편함으로 골드팩도 얹는다.
+const CUP_ROUNDS = 3;
+const CUP_ROUND_LABELS = ['8강', '4강', '결승'];
+const CUP_REWARDS = [
+  { coins: 300, points: 1 },
+  { coins: 550, points: 2 },
+  { coins: 1200, points: 5 },
+];
 
 function send(ws, msg) {
   if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
@@ -132,6 +143,64 @@ function validateLiveSquad(user, mode, formation, starters) {
   return null;
 }
 
+// KST 자정 기준이 아니라 서버 로컬 날짜 기준 — 하루 1회 컵대회 신규 시작
+// 제한(matchmaking.js의 startCup)과 SBC 챌린지 로테이션(game/sbc.js)이
+// 똑같은 "날짜 문자열" 개념을 쓴다.
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+// 클럽 평균 OVR(players.teamList()가 이미 계산해 반환) 기준 하위/중위/상위
+// 3분할 — 컵대회 라운드가 오를수록 강한 티어에서 상대를 뽑는다. 클럽 수가
+// 적어 한 티어가 비면 전체 풀로 대체한다.
+function cupTiers() {
+  const clubs = players.teamList().filter((t) => t.type === 'club').sort((a, b) => a.ovr - b.ovr);
+  const third = Math.max(1, Math.ceil(clubs.length / 3));
+  const tiers = [clubs.slice(0, third), clubs.slice(third, third * 2), clubs.slice(third * 2)];
+  return tiers.map((tier) => (tier.length ? tier : clubs));
+}
+
+// 무승부 결과의 컵대회 다음 라운드 진출자를 GK 능력치 기반 가중 동전던지기로
+// 결정한다 — 실제 승부차기 시뮬레이션은 아니지만(그러려면 simulate.js를
+// 건드려야 한다), "간단한 확률로 승자를 정한다"는 컵대회 취지에는 충분하고
+// 스코어보드 표시(무승부 스코어 그대로)는 건드리지 않는다.
+function resolveShootout(ratings) {
+  const roll = (r) => (r ? r.GK : 50) + Math.random() * 40;
+  const homeScore = Math.round(roll(ratings.home));
+  const awayScore = Math.round(roll(ratings.away));
+  return { homeWins: homeScore >= awayScore, homeScore, awayScore };
+}
+
+// 컵대회 매치 하나가 끝난 뒤 진행 상태를 갱신하고 보상을 계산한다 — 컵
+// 매치에서 실제 유저는 항상 home 쪽이므로(startCup 참고) outcome은 그
+// 유저 기준이다. u.cup을 직접 mutate하고 호출자가 store.putUser로 저장한다.
+function resolveCupProgress(u, outcome, ratings) {
+  const cup = u.cup;
+  const round = cup.round;
+  let advanced = outcome === 'win';
+  let shootout = null;
+  if (outcome === 'draw') {
+    const s = resolveShootout(ratings);
+    advanced = s.homeWins;
+    shootout = { winner: s.homeWins ? 'home' : 'away', homeScore: s.homeScore, awayScore: s.awayScore };
+  }
+  if (!advanced) {
+    cup.active = false;
+    cup.status = 'eliminated';
+    return { coins: 0, points: 0, round, advanced: false, champion: false, shootout };
+  }
+  const reward = CUP_REWARDS[round] || CUP_REWARDS[CUP_REWARDS.length - 1];
+  cup.wins++;
+  cup.round++;
+  const champion = cup.round >= CUP_ROUNDS;
+  if (champion) {
+    cup.active = false;
+    cup.status = 'won';
+    mailbox.sendMail(u, { message: '🏆 컵대회 우승 보상', packs: [{ id: 'gold', count: 1 }] });
+  }
+  return { coins: reward.coins, points: reward.points, round, advanced: true, champion, shootout };
+}
+
 function attach(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const queue = []; // authed sockets waiting for a PvP opponent
@@ -223,6 +292,14 @@ function attach(server) {
         removeFromQueue(ws);
         leaveSpectate(ws);
         startAi(ws);
+        break;
+      }
+      case 'queue_cup': {
+        if (playing.has(ws.userId)) return send(ws, { type: 'error', error: '이미 경기 중입니다.' });
+        if (!squadReady(user))
+          return send(ws, { type: 'error', error: '선발 11명을 모두 배치한 뒤 도전할 수 있습니다.' });
+        const err = startCup(ws, user);
+        if (err) return send(ws, { type: 'error', error: err });
         break;
       }
       case 'spectate_list': {
@@ -525,6 +602,55 @@ function attach(server) {
     });
   }
 
+  // 컵대회: 진행 중인 런이 없으면(또는 직전 런이 끝났으면) 새 런을 시작하고
+  // (하루 1회 제한), 진행 중이면 현재 라운드의 상대와 붙는다. 실패 시 에러
+  // 메시지 문자열을 반환하고(호출자가 그대로 클라이언트에 보냄), 성공하면
+  // undefined를 반환하며 매치를 실제로 시작시킨다.
+  function startCup(ws, user) {
+    let cup = user.cup;
+    if (cup.status !== 'in_progress') {
+      const today = todayKey();
+      if (cup.lastRunDate === today) {
+        return '컵대회는 하루에 한 번만 새로 시작할 수 있습니다. 내일 다시 도전하세요.';
+      }
+      const tiers = cupTiers();
+      const opponents = tiers.map((tier) => {
+        const t = tier[Math.floor(Math.random() * tier.length)];
+        return { name: t.name, ovr: t.ovr, logo: t.logo || null };
+      });
+      cup = { active: true, round: 0, wins: 0, opponents, status: 'in_progress', lastRunDate: today, lastMatchId: null };
+      user.cup = cup;
+      store.putUser(user);
+    }
+
+    const oppInfo = cup.opponents[cup.round];
+    const team = oppInfo && players.TEAMS[oppInfo.name];
+    if (!team) return '상대 팀 정보를 찾을 수 없습니다.';
+
+    removeFromQueue(ws);
+    leaveSpectate(ws);
+
+    const tactics = Object.keys(TACTICS);
+    const cupSquad = {
+      formation: DEFAULT_FORMATION,
+      starters: team.playerIds.slice(0, 11),
+      tactic: tactics[Math.floor(Math.random() * tactics.length)],
+      upgrades: {},
+    };
+    const us = liveSquad(user, user.squad);
+    const cupName = `${team.name} (${CUP_ROUND_LABELS[cup.round]})`;
+    const referee = pickReferee();
+    const result = simulateMatch(us, cupSquad, user.clubName, cupName, { cardBias: referee.cardBias });
+    runMatch({
+      mode: 'cup',
+      result,
+      referee,
+      squads: { home: us, away: cupSquad },
+      home: { ws, user, name: user.clubName, logo: teamLogo(user.baseTeam), lineup: lineupOf(us) },
+      away: { ws: null, user: null, name: cupName, logo: team.logo || null, lineup: lineupOf(cupSquad) },
+    });
+  }
+
   // Detached copy of a user's squad with their 강화 levels, 헌신도,
   // captain/vice-captain and 선수 유형(roles) attached, so the simulation
   // and the top view both see the boosted/role-adjusted cards.
@@ -682,12 +808,26 @@ function attach(server) {
       if (!u) return null;
       const teamSide = side === home ? 'home' : 'away';
       const outcome = outcomeFor(teamSide);
-      const [coins, points] = REWARDS[mode][outcome];
+      let coins;
+      let points;
+      let cup = null;
+      // 컵대회는 REWARDS[mode]가 없다(pvp/ai 전용 테이블) — 라운드별 보상과
+      // 진행 상태(u.cup) 갱신은 resolveCupProgress가 전담한다. 컵 매치는
+      // 항상 실제 유저가 home이라(startCup 참고) away에서는 이 분기를 타지
+      // 않는다. 승부차기로 갈린 결과라 record.w/d/l(진짜 전적)은 건드리지
+      // 않는다 — 무승부 스코어인데 '패배'로 잡히면 전적이 헷갈린다.
+      if (mode === 'cup') {
+        cup = resolveCupProgress(u, outcome, result.ratings);
+        coins = cup.coins;
+        points = cup.points;
+      } else {
+        [coins, points] = REWARDS[mode][outcome];
+        if (outcome === 'win') u.record.w++;
+        else if (outcome === 'draw') u.record.d++;
+        else u.record.l++;
+      }
       u.coins += coins;
       u.points += points;
-      if (outcome === 'win') u.record.w++;
-      else if (outcome === 'draw') u.record.d++;
-      else u.record.l++;
       playedEvents
         .filter((e) => e.type === 'goal' && e.team === teamSide)
         .forEach((e) => {
@@ -702,7 +842,7 @@ function attach(server) {
         store.bumpPlayerStat(u, pid, 'appearances');
       });
       store.putUser(u);
-      return { outcome, coins, points, balance: u.coins };
+      return { outcome, coins, points, balance: u.coins, cup };
     };
 
     const homeReward = applyReward(home);
@@ -741,6 +881,7 @@ function attach(server) {
       outcome: reward ? reward.outcome : null,
       reward: reward ? { coins: reward.coins, points: reward.points } : null,
       balance: reward ? reward.balance : null,
+      cup: reward ? reward.cup : null,
       // 프론트가 90+추가시간이 실제로 다 지나기 전에 종료 팝업을 띄우지
       // 않도록 서버가 정한 "진짜 끝나는 분"을 같이 보낸다.
       finalMinute: 90 + (ctx.stoppage || 0),

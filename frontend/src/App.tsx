@@ -11,6 +11,7 @@ import EventTab from './components/tabs/EventTab';
 import PredictTab from './components/tabs/PredictTab';
 import RankTab from './components/tabs/RankTab';
 import NewsTab from './components/tabs/NewsTab';
+import SocialTab from './components/tabs/SocialTab';
 import MatchTab from './components/tabs/MatchTab';
 
 // 요청: "뽑기 탭을 구매 탭으로 변경해주고... 뽑기 탭 옆에 이벤트 탭 만들어
@@ -24,6 +25,7 @@ const SHOP_SUBS: { id: ShopSubTab; label: string }[] = [
 const INFO_SUBS: { id: InfoSubTab; label: string }[] = [
   { id: 'rank', label: '랭킹 · 기록' },
   { id: 'news', label: '뉴스' },
+  { id: 'social', label: '소셜' },
 ];
 
 function MainView() {
@@ -44,6 +46,7 @@ function MainView() {
       {tab === 'predict' && <PredictTab />}
       {tab === 'info' && infoSub === 'rank' && <RankTab />}
       {tab === 'info' && infoSub === 'news' && <NewsTab />}
+      {tab === 'info' && infoSub === 'social' && <SocialTab />}
       {/* always mounted (not conditionally rendered like the tabs above) so
           a live match keeps animating/receiving WS events while the user
           browses other tabs — matches the vanilla app's CSS-hide behavior
