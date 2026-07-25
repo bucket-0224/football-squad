@@ -9,6 +9,7 @@ const auth = require('./auth');
 const players = require('./data/players');
 const { FORMATIONS, DEFAULT_FORMATION, LINE, posPenalty } = require('./game/formations');
 const { computeRatings, TACTICS, ROLE_DEFS, defaultRoleIdFor } = require('./game/simulate');
+const { slotPositionLabel, roleLookupLabel, coordFor } = require('./game/bands');
 const matchmaking = require('./matchmaking');
 const transfer = require('./transfer');
 const predictions = require('./predictions');
@@ -441,17 +442,20 @@ app.post('/api/squad/auto', auth.authMiddleware, (req, res) => {
   // 요청: "RB면 RB에 국한되어서 플레이스타일을 지정할 수 있어야하고, 배치가
   // 된 순간부터는 그 포지션에 플레이스타일 중 기본이 선택되어야" — 베스트
   // XI 추천은 슬롯마다 다른 선수를 앉히므로, 기존에 골라둔 유형이 새 슬롯
-  // 위치에서 더 이상 맞지 않으면 그 슬롯의 기본 유형으로 되돌린다.
-  const slots = FORMATIONS[formation];
+  // 위치에서 더 이상 맞지 않으면 그 슬롯의 기본 유형으로 되돌린다. 궁합
+  // 판정 기준은 computeRatings와 동일하게 실제 배치 좌표(slotCoords, 베스트
+  // XI는 좌표 자체는 건드리지 않으므로 기존 slotCoords 그대로) 기반이다.
   const nextRoles = {};
   starters.forEach((pid, i) => {
     if (!pid) return;
+    const coord = coordFor(formation, squad.slotCoords, i);
+    const placedLabel = roleLookupLabel(slotPositionLabel(coord[0], coord[1]));
     const prevRoleId = (squad.roles || {})[pid];
     const prevRole = prevRoleId && ROLE_DEFS[prevRoleId];
-    if (prevRole && prevRole.pos.includes(slots[i])) {
+    if (prevRole && prevRole.pos.includes(placedLabel)) {
       nextRoles[pid] = prevRoleId;
     } else {
-      const def = defaultRoleIdFor(slots[i]);
+      const def = defaultRoleIdFor(placedLabel);
       if (def) nextRoles[pid] = def;
     }
   });

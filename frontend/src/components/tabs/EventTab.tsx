@@ -64,7 +64,7 @@ export default function EventTab() {
       const { grade, grid: nextGrid, reset } = await openEventCell(activeEvent.id, index);
       setGrid(nextGrid);
       if (reset) {
-        toast(`🎉 ${grade}급 보상 획득! 그리드가 새로 초기화되었습니다.`);
+        toast('🎉 SSS를 뽑았습니다! 보상이 지급되고, 픽업판이 초기화 됩니다!');
       } else {
         toast(`${grade}급 보상 획득! 우편함에서 수령하면 확인할 수 있습니다.`);
       }

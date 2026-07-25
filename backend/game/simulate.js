@@ -2,6 +2,7 @@
 
 const { FORMATIONS, DEFAULT_FORMATION, LINE } = require('./formations');
 const players = require('../data/players');
+const { bandOfY, bandPenalty, slotPositionLabel, roleLookupLabel, coordFor } = require('./bands');
 
 // --- helpers ---------------------------------------------------------------
 
@@ -142,15 +143,18 @@ const ROLE_EMPHASIS = {
 };
 
 // 요청 변천사: "포지션과 무관하게 아무 유형이나 적용" → "그건 너무 과했다,
-// RB면 RB에 국한되어서 유형을 지정할 수 있어야" — 다시 슬롯 궁합을 본다.
-// 다만 예전에 이 궁합 검사가 PUT /api/squad의 "저장" 자체를 막아서 생긴
-// 버그("주장/부주장/전술 변경이 Cherki 때문에 거부됨")는 그 저장 검증
-// 로직에서 난 것이었지 여기(순수 계산 함수, 저장을 막지 않음)와는 무관 —
-// 여기서 슬롯에 안 맞는 roleId를 만나면 그냥 슬롯 기본 공식으로 조용히
-// 대체할 뿐 아무것도 거부하지 않으므로 같은 버그가 재발할 여지가 없다.
-function roleAwareScore(player, slotPos, slotLine, roleId) {
+// RB면 RB에 국한되어서 유형을 지정할 수 있어야" → "시뮬레이션에서 스쿼드에서
+// 배치된 포메이션 위주로 플레이되게" — 궁합 판정 기준을 포메이션 프리셋의
+// 고정 라벨(slots[i])이 아니라 실제로 배치된 좌표(placedLabel, bands.js가
+// frontend와 동일하게 계산)로 본다. 다만 예전에 이 궁합 검사가
+// PUT /api/squad의 "저장" 자체를 막아서 생긴 버그("주장/부주장/전술 변경이
+// Cherki 때문에 거부됨")는 그 저장 검증 로직에서 난 것이었지 여기(순수 계산
+// 함수, 저장을 막지 않음)와는 무관 — 여기서 자리에 안 맞는 roleId를 만나면
+// 그냥 슬롯 기본 공식으로 조용히 대체할 뿐 아무것도 거부하지 않으므로 같은
+// 버그가 재발할 여지가 없다.
+function roleAwareScore(player, placedLabel, slotLine, roleId) {
   const role = roleId && ROLE_DEFS[roleId];
-  if (role && role.pos.includes(slotPos)) return role.score(player.attrs);
+  if (role && role.pos.includes(placedLabel)) return role.score(player.attrs);
   return roleScore(player.attrs, slotLine);
 }
 
@@ -203,20 +207,36 @@ function computeRatings(squad) {
       lines[slotLine].push(40);
       return;
     }
+    // "배치가 된 순간부터는 그 포지션에 플레이스타일 중 기본이 선택되어야"
+    // / "스쿼드에서 배치된 포메이션 위주로 플레이되게" — 유형 궁합과 아래의
+    // 자리 페널티 모두, 포메이션 프리셋의 고정 라벨이 아니라 자유 배치로
+    // 실제 옮겨진 좌표(squad.slotCoords, 없으면 그 포메이션의 기본 좌표)를
+    // 기준으로 판정한다 — 스쿼드 화면에 카드가 실제로 찍는 라벨과 정확히
+    // 같은 기준(frontend game/bands.ts)이다.
+    const coord = coordFor(formation, squad.slotCoords, i);
+    const band = bandOfY(coord[1]);
+    const placedLabel = roleLookupLabel(slotPositionLabel(coord[0], coord[1]));
     const chem = chemistry(p.line, slotLine);
     let mult = chem * devotionFactor(devotionMap ? devotionMap[id] : null);
     if (captainId && id === captainId) mult *= 1.05;
     else if (viceCaptainId && id === viceCaptainId) mult *= 1.025;
     const roleId = roleMap ? roleMap[id] : null;
     const role = roleId && ROLE_DEFS[roleId];
-    // 유형은 지금 배치된 슬롯(slotPos)에 맞을 때만 적용한다(위
-    // roleAwareScore 주석 참고) — 안 맞거나 아예 안 골랐으면 슬롯 기본
-    // 유형으로 대체.
-    const roleFits = role && role.pos.includes(slotPos);
-    const effectiveRoleId = roleFits ? roleId : defaultRoleIdFor(slotPos);
-    const score = roleAwareScore(p, slotPos, slotLine, roleId) * mult;
+    // 유형은 지금 실제로 배치된 자리(placedLabel)에 맞을 때만 적용한다(위
+    // roleAwareScore 주석 참고) — 안 맞거나 아예 안 골랐으면 그 자리의
+    // 기본 유형으로 대체.
+    const roleFits = role && role.pos.includes(placedLabel);
+    const effectiveRoleId = roleFits ? roleId : defaultRoleIdFor(placedLabel);
+    // "그 유형에 맞지 않는 기존 포지션의 플레이어가 들어가더라도 그 유형의
+    // 플레이를 할 수 있게 해줘야해. 다만 그렇게 할 경우에 시뮬레이션에서
+    // 능력치 감소가 되어야" — 유형 적용 자체는 막지 않되(위에서 자리에
+    // 맞는 유형이면 그대로 적용), 선수 본인의 실제 포지션이 지금 서 있는
+    // 밴드와 멀수록(bandPenalty, 스쿼드 화면 카드에 뜨는 적합도 페널티와
+    // 동일한 공식) 능력치를 깎는다.
+    const posPen = bandPenalty(p.pos, band);
+    const score = Math.max(30, roleAwareScore(p, placedLabel, slotLine, roleId) - posPen) * mult;
     lines[slotLine].push(score);
-    roster.push({ player: p, slotPos, slotLine, chem, score, roleId: effectiveRoleId });
+    roster.push({ player: p, slotPos, placedLabel, slotLine, chem, score, roleId: effectiveRoleId });
   });
 
   const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : 40);
