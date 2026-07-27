@@ -426,14 +426,27 @@ function attach(server) {
         // EPL rule: at most 5 substitutions per match (position swaps among
         // the current XI are free — only new entrants count)
         const current = ctx.squads[side].starters;
-        const newcomers = msg.starters.filter((id) => id && !current.includes(id)).length;
-        if (ctx.subs[side] + newcomers > SUBS_PER_SIDE) {
+        const newcomers = msg.starters.filter((id) => id && !current.includes(id));
+        // Law 3: 한 번 교체되어 나간 선수는 같은 경기에 재출전할 수 없다.
+        const returning = newcomers.find((id) => ctx.subbedOff[side].has(id));
+        if (returning) {
+          const p = players.getPlayer(returning);
+          return send(ws, {
+            type: 'error',
+            error: `${p ? p.name : '해당'} 선수는 이미 교체되어 나가 다시 출전할 수 없습니다.`,
+          });
+        }
+        if (ctx.subs[side] + newcomers.length > SUBS_PER_SIDE) {
           return send(ws, {
             type: 'error',
             error: `교체는 경기당 최대 ${SUBS_PER_SIDE}명입니다. (남은 교체: ${Math.max(0, SUBS_PER_SIDE - ctx.subs[side])}명)`,
           });
         }
-        ctx.subs[side] += newcomers;
+        ctx.subs[side] += newcomers.length;
+        // 이번 변경으로 명단에서 빠진(=교체 아웃된) 선수 기록
+        current
+          .filter((id) => id && !msg.starters.includes(id))
+          .forEach((id) => ctx.subbedOff[side].add(id));
         applyLiveSquad(ctx, side, formation, msg.starters);
         break;
       }
@@ -524,7 +537,9 @@ function attach(server) {
       ctx.score,
       ctx.home.name,
       ctx.away.name,
-      { sentOff: redsSoFar(ctx).reds }
+      // stoppage 고정: 재시뮬이 새 추가시간을 뽑으면 진행 중인 경기의 종료
+      // 시점(ctx.stoppage)과 어긋나 90+X' 이벤트가 잘리거나 남을 수 있다.
+      { sentOff: redsSoFar(ctx).reds, stoppage: ctx.stoppage }
     );
     ctx.result.ratings = r.ratings;
     ctx.result.possession = r.possession;
@@ -715,13 +730,17 @@ function attach(server) {
 
     ctx.minute = 0;
     ctx.score = { home: 0, away: 0 };
-    // injury time: more late events -> more stoppage (2~5분)
-    const lateEvents = result.timeline.filter((e) => e.minute > 60).length;
-    ctx.stoppage = Math.max(2, Math.min(5, 1 + Math.round(lateEvents / 3)));
+    // injury time: simulate.js가 이벤트 분 배정에 쓴 값을 그대로 따라야
+    // 90+X' 이벤트가 전부 재생된 뒤 종료 휘슬이 울린다.
+    ctx.stoppage = result.stoppage || 2;
     ctx.paused = false;
     ctx.pausedBy = null;
     ctx.pauses = { home: PAUSES_PER_SIDE, away: PAUSES_PER_SIDE };
     ctx.subs = { home: 0, away: 0 }; // EPL: 5 subs per side per match
+    // Law 3: 교체되어 나간 선수는 그 경기에 다시 출전할 수 없다 — 작전
+    // 타임/메디컬 타임아웃에서 명단에서 빠진 선수를 여기 기록해 두고,
+    // update_squad가 재투입을 거부한다.
+    ctx.subbedOff = { home: new Set(), away: new Set() };
     // 관전: keep the start message (refreshed on live squad changes) so
     // spectators joining mid-match get the current lineups
     ctx.id = 'g' + crypto.randomBytes(4).toString('hex');

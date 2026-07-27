@@ -264,12 +264,16 @@ function computeRatings(squad) {
 // --- tactics ---------------------------------------------------------------
 
 // atk multiplies own xG, def divides opponent xG, poss shifts possession.
-// 'counter' gets a bonus against an attacking opponent.
+// vsAttacking/vsCounter: 상대가 그 전술일 때 자기 xG에 곱하는 상성 보너스 —
+// 역습은 라인을 올린 공격적 상대의 뒷공간을 노리고, 수비(딥 블록)는 역습
+// 상대에게 역습 나갈 공간 자체를 안 준다. 공격적 전술은 낮은 블록을
+// 두드려 부수는 쪽(수비적 상대에 유리)이라 가위바위보가 성립한다:
+// 공격 > 수비 > 역습 > 공격, 균형은 어느 쪽에도 크게 치우치지 않는다.
 const TACTICS = {
   attacking: { name: '공격적', atk: 1.18, def: 0.9, poss: 0.03 },
   balanced: { name: '균형', atk: 1.0, def: 1.0, poss: 0 },
-  defensive: { name: '수비적', atk: 0.82, def: 1.14, poss: -0.04 },
-  counter: { name: '역습', atk: 0.95, def: 1.04, poss: -0.02, vsAttacking: 1.22 },
+  defensive: { name: '수비적', atk: 0.84, def: 1.18, poss: -0.04, vsCounter: 1.2 },
+  counter: { name: '역습', atk: 0.95, def: 1.04, poss: -0.02, vsAttacking: 1.35 },
 };
 
 function tacticOf(squad) {
@@ -298,9 +302,17 @@ function tacticOf(squad) {
 // 함수로 적용되어 편파적이지 않다.
 const LINE_HEIGHT = { attacking: 70, balanced: 0, defensive: -60, counter: -40 };
 function isOffsideRun(atkTactic, defTactic, atkRatings, defRatings) {
-  const atkLine = LINE_HEIGHT[atkTactic] ?? 0;
   const defLine = LINE_HEIGHT[defTactic] ?? 0;
-  let p = 0.05 + Math.max(0, defLine - atkLine + 60) / 700;
+  // 오프사이드가 성립할 상황의 빈도는 "수비하는 팀"의 라인 높이가 결정한다
+  // — 라인이 높을수록(공격적 전술) 그 라인 뒤로 침투하다 걸리는 장면이
+  // 늘어난다. 예전 공식은 공격팀 자신의 라인 높이(atkLine)를 빼서, 라인이
+  // 낮은 팀(수비/역습)의 공격일수록 오프사이드가 늘어나는 역방향 효과가
+  // 있었다 — 그 결과 역습의 vsAttacking 보너스가 통째로 상쇄되어 "역습이
+  // 공격적 상대에 강하다"는 상성이 시뮬레이션에서 거꾸로 뒤집혀 있었다.
+  // 역습은 오히려 깊은 위치에서 온사이드로 출발해 타이밍을 재는 침투라
+  // 걸리는 비율이 낮다(×0.55).
+  let p = 0.05 + Math.max(0, defLine + 60) / 700;
+  if (atkTactic === 'counter') p *= 0.55;
   p += (defRatings.DEF - atkRatings.ATT) / 900;
   return Math.random() < clamp(p, 0.02, 0.32);
 }
@@ -358,8 +370,8 @@ function assistFor(ratings, scorerId, excludeId) {
   return r ? { id: r.player.id, name: r.player.name } : null;
 }
 
-function uniqueMinutes(n, from = 1) {
-  const span = Math.max(1, 91 - from);
+function uniqueMinutes(n, from = 1, to = 90) {
+  const span = Math.max(1, to + 1 - from);
   const set = new Set();
   let guard = 0;
   while (set.size < Math.min(n, span) && guard < 400) {
@@ -380,6 +392,12 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   // 경기 전 프리뷰에서 고른 심판 성향 — 1.0이 기준, 엄격할수록 카드가
   // 늘고 관대할수록 준다. 파울/카드 관련 확률에만 곱한다.
   const cardBias = opts.cardBias || 1;
+  // 후반 추가시간(2~5분). 이벤트 분 배정이 이 값까지 열려 있어 90+X'
+  // 극장골/카드가 실제로 나온다 — 실제 EPL 득점의 8% 안팎이 90분 이후다.
+  // 작전 타임 재시뮬(simulateRemainder)은 이미 진행 중인 경기의 추가시간을
+  // 그대로 물려받아야 하므로 opts.stoppage로 고정해 넘긴다(matchmaking.js).
+  const stoppage = opts.stoppage || 2 + Math.floor(Math.random() * 4);
+  const lastMinute = 90 + stoppage;
   const home = computeRatings(homeSquad);
   const away = computeRatings(awaySquad);
 
@@ -402,11 +420,20 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     return clamp(1.15 + diff / 15, 0.2, 4.5) * (0.7 + poss * 0.6);
   };
 
-  const counterBonus = (t, oppTac) =>
-    t.vsAttacking && oppTac === 'attacking' ? t.vsAttacking : 1;
+  const counterBonus = (t, oppTac) => {
+    if (t.vsAttacking && oppTac === 'attacking') return t.vsAttacking;
+    if (t.vsCounter && oppTac === 'counter') return t.vsCounter;
+    return 1;
+  };
 
+  // 홈 어드밴티지 — 홈 관중/친숙한 구장 효과로 홈 팀 xG에만 소폭 가산.
+  // EPL 실제 홈 승률(~45%, 원정 ~30%)을 재현하기 위한 값으로, 동일 전력
+  // 몬테카를로에서 홈 44% / 무 24% / 원정 32% 근방이 나오도록 튜닝했다.
+  // AI전/컵대회는 유저가 항상 home이라(matchmaking.js) 유저에게 유리하게
+  // 작용하는데, 이는 기존 승부차기 홈 우대와 같은 방향의 의도적 PvE 완화다.
+  const HOME_XG_BOOST = 1.18;
   const xgHome =
-    (xg(home.ATT, away.DEF, away.GK, possHome) * tHome.atk * counterBonus(tHome, tacAway)) /
+    (xg(home.ATT, away.DEF, away.GK, possHome) * tHome.atk * counterBonus(tHome, tacAway) * HOME_XG_BOOST) /
     tAway.def;
   const xgAway =
     (xg(away.ATT, home.DEF, home.GK, possAway) * tAway.atk * counterBonus(tAway, tacHome)) /
@@ -420,7 +447,7 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   // Flavor (non-goal) events, roughly proportional to attacking output.
   const addFlavor = (side, ratings, oppGKrating, xgVal) => {
     const n = Math.round((xgVal * 2 + 1 + Math.random() * 3) * frac);
-    uniqueMinutes(n, fromMinute + 1).forEach((minute) => {
+    uniqueMinutes(n, fromMinute + 1, lastMinute).forEach((minute) => {
       const roll = Math.random();
       let type;
       let text;
@@ -516,6 +543,36 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   addFlavor('home', home, away.GK, xgHome);
   addFlavor('away', away, home.GK, xgAway);
 
+  // 일반 경고 — 실제 EPL은 경기당 옐로카드가 팀 합계 4장 안팎(23/24 시즌
+  // 4.3장)인데, 공격 전개량에 비례하는 위 flavor 카드(경기당 ~1.3장)만으로는
+  // 턱없이 모자라다. 몸싸움/전술적 파울에서 나오는 기본 경고를 양 팀에
+  // 독립적으로 얹어 합계 ~4장을 맞춘다. 태클하는 쪽(수비/미드필더)이 더
+  // 자주 받도록 가중치를 둔다. 퇴장 승격(두 번째 경고/스트레이트 레드)은
+  // 아래 기존 경고 누적 로직이 flavor 카드와 똑같이 처리한다.
+  const addBookings = (side, ratings) => {
+    const n = Math.round((0.4 + Math.random() * 1.8) * cardBias * frac + Math.random() * 0.5);
+    uniqueMinutes(n, fromMinute + 1, lastMinute).forEach((minute) => {
+      const whoC = pickWeighted(
+        ratings.roster.filter((c) => c.slotLine !== 'GK'),
+        (c) => (c.slotLine === 'DEF' ? 2.2 : c.slotLine === 'MID' ? 2 : 1)
+      );
+      if (!whoC) return;
+      const opp = side === 'home' ? 'away' : 'home';
+      events.push({
+        minute,
+        type: 'card',
+        team: side,
+        player: whoC.player.name,
+        playerId: whoC.player.id,
+        text: `${whoC.player.name} 경고 (옐로카드)`,
+        via: null,
+        awardedTeam: opp,
+      });
+    });
+  };
+  addBookings('home', home);
+  addBookings('away', away);
+
   // 부상(injury) / 태업(work-to-rule strop): low-probability, independent of
   // attacking output — at most one of each per side per match. Reuses the
   // same ".off" unavailability mechanism as a red card downstream (backend
@@ -527,7 +584,7 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   const addUnavailability = (side, ratings, squad) => {
     const outfield = ratings.roster.filter((r) => r.slotLine !== 'GK');
     if (!outfield.length || !frac) return;
-    const randMinute = () => fromMinute + 1 + Math.floor(Math.random() * Math.max(1, 90 - fromMinute));
+    const randMinute = () => fromMinute + 1 + Math.floor(Math.random() * Math.max(1, lastMinute - fromMinute));
 
     if (Math.random() < INJURY_CHANCE * frac) {
       const victim = outfield[Math.floor(Math.random() * outfield.length)].player;
@@ -576,12 +633,30 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   {
     const booked = { home: new Map(), away: new Map() }; // name -> id
     const redDone = { home: false, away: false };
+    const ratingsOf = (side) => (side === 'home' ? home : away);
     events
       .filter((e) => e.type === 'card')
       .sort((a, b) => a.minute - b.minute)
       .forEach((e) => {
         const side = e.team;
-        if (redDone[side]) return;
+        if (redDone[side]) {
+          // 퇴장이 이미 나온 뒤 그 선수 몫으로 배정돼 있던 카드는 아직
+          // 그라운드에 있는(경고 없는) 동료에게 돌린다 — 퇴장 선수는 더
+          // 이상 카드를 받을 수 없다.
+          const d = dismissed[side];
+          if (d && e.playerId === d.id) {
+            const clean = ratingsOf(side).roster.filter(
+              (c) => c.slotLine !== 'GK' && c.player.id !== d.id && !booked[side].has(c.player.name)
+            );
+            if (clean.length) {
+              const other = clean[Math.floor(Math.random() * clean.length)].player;
+              e.player = other.name;
+              e.playerId = other.id;
+              e.text = `${e.player} 경고 (옐로카드)`;
+            }
+          }
+          return;
+        }
         const sendOff = (text) => {
           e.red = true;
           e.text = text;
@@ -592,28 +667,60 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
           redAdj[side] *= 1 - 0.35 * rem;
           redAdj[opp] *= 1 + 0.25 * rem;
         };
-        // 스트레이트 레드: 심각한 반칙은 경고 없이 즉시 퇴장 (실제 레드의
-        // 절반 이상이 이 유형) — VAR 판독을 거쳐 확정되는 것으로 서사를
-        // 붙인다(프론트가 이 문구를 감지해 VAR 배너를 띄운다).
-        if (Math.random() < 0.08 * cardBias) {
+        // 스트레이트 레드: 심각한 반칙은 경고 없이 즉시 퇴장 — VAR 판독을
+        // 거쳐 확정되는 것으로 서사를 붙인다(프론트가 이 문구를 감지해 VAR
+        // 배너를 띄운다). 확률은 실제 EPL 빈도(경기당 레드 ~0.13장, 그중
+        // 절반 남짓이 스트레이트)에 맞춰 잡는다 — 경고가 경기당 ~4장으로
+        // 늘어난 만큼 카드당 승격 확률은 예전(8%)보다 훨씬 낮아야 전체
+        // 레드가 실제 수준에 머문다.
+        if (Math.random() < 0.015 * cardBias) {
           sendOff(`🟥 ${e.player} 퇴장! (심각한 반칙 — VAR 판독 후 확정)`);
           return;
         }
-        const names = [...booked[side].keys()];
-        // repeat-offender bias: a booked player keeps fouling sometimes —
-        // reassign both name and id together so they never drift apart
-        if (names.length && !booked[side].has(e.player) && Math.random() < 0.35) {
-          e.player = names[Math.floor(Math.random() * names.length)];
-          e.playerId = booked[side].get(e.player);
-        }
         if (booked[side].has(e.player)) {
-          sendOff(`🟥 ${e.player} 두 번째 경고 — 퇴장!`);
+          // 이미 경고가 있는 선수는 태클을 사리기 때문에 실제 두 번째
+          // 경고는 드물다(실제 EPL 두 번째 경고 퇴장은 경기당 ~0.05장) —
+          // 대부분은 심판이 잡은 반칙이 아직 경고 없는 동료의 것으로
+          // 처리되고, 일부만 진짜 두 번째 경고 퇴장으로 이어진다.
+          const clean = ratingsOf(side).roster.filter(
+            (c) => c.slotLine !== 'GK' && !booked[side].has(c.player.name)
+          );
+          if (clean.length && Math.random() < 0.75) {
+            const other = clean[Math.floor(Math.random() * clean.length)].player;
+            e.player = other.name;
+            e.playerId = other.id;
+            booked[side].set(e.player, e.playerId);
+            e.text = `${e.player} 경고 (옐로카드)`;
+          } else {
+            sendOff(`🟥 ${e.player} 두 번째 경고 — 퇴장!`);
+          }
         } else {
           booked[side].set(e.player, e.playerId);
           e.text = `${e.player} 경고 (옐로카드)`;
         }
       });
   }
+
+  // 퇴장 선수는 퇴장 시점 이후의 일반 이벤트(슈팅/선방/파울/부상 등)에도 더
+  // 이상 등장할 수 없다 — 득점/어시스트는 addGoals가 excludeAt으로 거르지만,
+  // flavor/부상 이벤트는 카드(퇴장) 판정보다 먼저 배우를 골라두기 때문에
+  // 퇴장이 확정된 지금 시점에 아직 그라운드에 있는 동료로 돌려놓는다.
+  // (card 이벤트는 위 경고 누적 로직이 booked 집합과 함께 이미 처리했다.)
+  ['home', 'away'].forEach((side) => {
+    const d = dismissed[side];
+    if (!d) return;
+    const ratings = side === 'home' ? home : away;
+    events.forEach((e) => {
+      if (e.team !== side || e.red || e.type === 'card') return;
+      if (e.playerId !== d.id || e.minute < d.minute) return;
+      const pool = ratings.roster.filter((c) => c.slotLine !== 'GK' && c.player.id !== d.id);
+      if (!pool.length) return;
+      const sub = pool[Math.floor(Math.random() * pool.length)].player;
+      if (e.player && e.text) e.text = e.text.split(e.player).join(sub.name);
+      e.player = sub.name;
+      e.playerId = sub.id;
+    });
+  });
 
   // 작전타임 재시뮬: 이미 퇴장이 나온 상태로 남은 경기를 굴릴 때의 수적 열세
   const sentOff = opts.sentOff || { home: 0, away: 0 };
@@ -641,7 +748,7 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     // this models "share of goals originating from a corner", not the much
     // lower raw corner-to-shot conversion rate (a different, smaller stat).
     const cornerShare = clamp(0.1 * (1 + (aerialStrength(ratings) - AERIAL_BASELINE_CM) / 100), 0.05, 0.16);
-    uniqueMinutes(count, fromMinute + 1).forEach((minute) => {
+    uniqueMinutes(count, fromMinute + 1, lastMinute).forEach((minute) => {
       // set-piece share tuned to EPL rates: ~12% of goals are penalties,
       // ~6% direct free kicks; the rest are worked through open play
       const r = Math.random();
@@ -792,6 +899,9 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
     // 쓰면 addGoals 안에서 오프사이드로 취소된 시도까지 득점으로 잡혀
     // 스코어보드와 타임라인이 서로 어긋난다.
     score: { home: sh, away: sa },
+    // 이 경기의 후반 추가시간(분) — matchmaking.js가 경기 종료 시점(90+X')과
+    // 작전 타임 재시뮬(simulateRemainder에 그대로 되넘김)에 쓴다.
+    stoppage,
     timeline,
   };
 }

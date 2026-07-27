@@ -346,7 +346,12 @@ function openPack(user, packId, opts = {}) {
   let refund = 0;
   if (owned && alreadyDrawn) {
     duplicate = true;
-    refund = Math.round(players.getPrice(p.id) * SELL_RATE);
+    // 환불은 팩 정가를 넘지 않는다 — 브론즈처럼 풀이 작고 카드 시세가 팩
+    // 가격보다 높은 구간에서, 풀을 다 모은 뒤 중복 환불(시세의 55%)이
+    // 팩 가격을 웃돌아 무한 코인 펌프가 되는 걸 구조적으로 막는다.
+    // def.price(정가) 기준: 이벤트 보상으로 무료 개봉(opts.free)한 팩의
+    // 중복도 정가만큼은 환불받는다.
+    refund = Math.min(Math.round(players.getPrice(p.id) * SELL_RATE), def.price);
     user.coins += refund;
   } else if (owned) {
     unlocked = true;
