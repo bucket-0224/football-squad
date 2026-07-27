@@ -42,6 +42,14 @@ const PORT = process.env.PORT || 3000;
 const STARTING_COINS = 1500;
 const SELL_RATE = 0.55;
 const CLUB_CHANGE_COST = 50; // 승점
+// 자동 시뮬레이션권(상점 기타 탭): AI전/컵 경기를 애니메이션 없이 즉시
+// 결과로 건너뛰는 소모품. 10장 단위 묶음으로만 판매하며 묶음이 클수록
+// 장당 단가가 싸다. 사용(차감)은 matchmaking.js의 'skip' 핸들러가 담당.
+const SIM_TICKET_BUNDLES = [
+  { count: 10, price: 300 },
+  { count: 20, price: 400 },
+  { count: 30, price: 500 },
+];
 
 const LEAGUES = [
   { id: 'EPL', label: 'EPL' },
@@ -118,6 +126,7 @@ function sanitizeUser(u) {
     baseTeam: u.baseTeam,
     coins: u.coins,
     points: u.points,
+    simTickets: u.simTickets || 0, // 자동 시뮬레이션권 보유 수 (기존 유저는 필드가 없어 0)
     record: u.record,
     owned: u.owned,
     drawn: u.drawn,
@@ -300,6 +309,7 @@ app.get('/api/bootstrap', (req, res) => {
     ),
     market: players.marketList(),
     packs: transfer.packList(),
+    simTicketBundles: SIM_TICKET_BUNDLES,
     enhance: players.ENHANCE,
     ultra: { cost: players.ULTRA_COST, bonus: players.ULTRA_BONUS },
     events: event.listEvents(),
@@ -612,6 +622,22 @@ app.post('/api/packs/open', auth.authMiddleware, (req, res) => {
   const out = { results, user: sanitizeUser(req.user) };
   if (results.length === 1) Object.assign(out, results[0]); // single-draw shape
   res.json(out);
+});
+
+// ---- 상점 기타: 자동 시뮬레이션권 -------------------------------------------
+// AI전/컵 경기를 즉시 결과로 건너뛰는 소모품 묶음 구매. 정의된 묶음
+// (SIM_TICKET_BUNDLES)만 판매하고, 사용은 matchmaking.js 'skip'이 처리한다.
+app.post('/api/shop/sim-tickets', auth.authMiddleware, (req, res) => {
+  const { count } = req.body || {};
+  const bundle = SIM_TICKET_BUNDLES.find((b) => b.count === Number(count));
+  if (!bundle) return bad(res, 400, '판매하지 않는 묶음입니다.');
+  if (req.user.coins < bundle.price) {
+    return bad(res, 400, `코인이 부족합니다. (필요: ${bundle.price}, 보유: ${req.user.coins})`);
+  }
+  req.user.coins -= bundle.price;
+  req.user.simTickets = (req.user.simTickets || 0) + bundle.count;
+  store.putUser(req.user);
+  res.json({ user: sanitizeUser(req.user), bought: bundle.count });
 });
 
 // ---- 이벤트(기간 한정 열쇠 그리드) ------------------------------------------

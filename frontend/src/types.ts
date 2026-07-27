@@ -130,6 +130,7 @@ export interface User {
   baseTeam: string;
   coins: number;
   points: number;
+  simTickets?: number; // 자동 시뮬레이션권 보유 수 (AI전/컵 건너뛰기)
   record: { w: number; d: number; l: number };
   owned: string[];
   drawn: string[];
@@ -212,6 +213,7 @@ export interface Bootstrap {
   tactics: Record<string, string>; // tacticId -> Korean display label
   market: CatalogPlayer[];
   packs: unknown[];
+  simTicketBundles?: { count: number; price: number }[]; // 자동 시뮬레이션권 묶음 상품
   enhance: { maxLevel: number; rates: number[]; costRate: number };
   ultra: { cost: number; bonus: number };
   roles: Record<string, Role>;

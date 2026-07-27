@@ -134,6 +134,9 @@ export default function MatchTab({ visible }: { visible: boolean }) {
   const [spectateList, setSpectateList] = useState<SpectateRow[]>([]);
   const [spectating, setSpectating] = useState(false);
   const [mySide, setMySide] = useState<'home' | 'away'>('home');
+  // 지금 뛰는 매치 모드 — 건너뛰기(자동 시뮬레이션권)는 사람 상대가 없는
+  // ai/cup에서만 노출한다.
+  const [liveMode, setLiveMode] = useState('');
 
   const [homeName, setHomeName] = useState('');
   const [awayName, setAwayName] = useState('');
@@ -286,6 +289,17 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           }
           break;
         }
+        case 'skip_ok': {
+          const left = Number(msg.simTickets) || 0;
+          const cur = useAppStore.getState().me;
+          if (cur) useAppStore.getState().setMe({ ...cur, simTickets: left });
+          toast(`⏩ 자동 시뮬레이션권 사용 — 남은 ${left}장`);
+          break;
+        }
+        case 'skipped':
+          engine.fastForward();
+          showBanner('⏩ 자동 시뮬레이션 — 경기 결과로 건너뜁니다', 'phase');
+          break;
         case 'result':
           engine.queueResult(msg as unknown as ResultMsg);
           break;
@@ -333,6 +347,7 @@ export default function MatchTab({ visible }: { visible: boolean }) {
   function startLiveMatch(msg: MatchStartAll) {
     setSpectating(!!msg.spectate);
     setMySide(msg.youAre || 'home');
+    setLiveMode(msg.mode || '');
     matchTacticNamesRef.current = { home: msg.home.tacticName || '', away: msg.away.tacticName || '' };
     setQueued(false);
     setView('live');
@@ -592,6 +607,22 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           <button type="button" className="btn small" disabled={pauseDisabled} onClick={() => sendWs({ type: 'pause' })}>
             ⏸ 작전 타임 (<span>{pausesLeft}</span>)
           </button>
+          {liveMode !== 'pvp' && !resultMsg && (
+            <button
+              type="button"
+              className="btn small"
+              title="자동 시뮬레이션권 1장을 사용해 경기 결과로 즉시 건너뜁니다"
+              onClick={() => {
+                if ((me.simTickets || 0) <= 0) {
+                  toast('자동 시뮬레이션권이 없습니다. 상점의 기타 탭에서 구매하세요.');
+                  return;
+                }
+                sendWs({ type: 'skip' });
+              }}
+            >
+              ⏩ 건너뛰기 ({me.simTickets || 0})
+            </button>
+          )}
           <span className="dim small-text">{pauseStatus}</span>
         </div>
         <div id="spectate-bar" className={'pause-bar' + (spectating ? '' : ' hidden')}>

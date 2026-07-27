@@ -17,9 +17,11 @@ const PACK_META: Record<string, { img: string; desc: string; cls: string }> = {
 const SPARK_COLORS = ['#ffd76e', '#ff7a7a', '#7ab8ff', '#9dff8a', '#e19bff'];
 
 export default function PacksTab() {
-  const { bootstrap, setMe } = useAppStore();
+  const { bootstrap, me, setMe } = useAppStore();
   const [results, setResults] = useState<PackResult[] | null>(null);
   const [lastPack, setLastPack] = useState<{ id: string; count: number } | null>(null);
+  // 상점 서브탭: 카드팩 / 기타(자동 시뮬레이션권 등 소모품)
+  const [shopTab, setShopTab] = useState<'packs' | 'etc'>('packs');
 
   if (!bootstrap) return null;
 
@@ -37,6 +39,16 @@ export default function PacksTab() {
     }
   };
 
+  const buyTickets = async (count: number) => {
+    try {
+      const r = await api.post<{ user: User; bought: number }>('/api/shop/sim-tickets', { count });
+      setMe(r.user);
+      toast(`⏩ 자동 시뮬레이션권 ${r.bought}장 구매 완료! (보유 ${r.user.simTickets || 0}장)`);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : String(err));
+    }
+  };
+
   // 요청: "이벤트인 만큼 카드팩 최상단에 기간제로 배너 느낌 달아주고
   // 이벤트 진행 중이라고 인식되게 추가" — 활성 이벤트가 있을 때만 보이고,
   // 종료일이 지나면(백엔드가 active를 false로 내려줌) 자동으로 사라진다.
@@ -49,33 +61,77 @@ export default function PacksTab() {
           🔥 {activeEvent.name} 진행 중 — {formatEventEnd(activeEvent.endsAt)}까지 · 이벤트 탭에서 확인하세요
         </div>
       )}
-      <div className="packs-intro dim">
-        팩을 열어 무작위 선수를 영입하세요. 이미 보유한 선수가 나오면 판매가(55%)만큼 코인으로 전환됩니다.
+      <div className="shop-subtabs" style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+        <button
+          type="button"
+          className={'btn small' + (shopTab === 'packs' ? ' primary' : '')}
+          onClick={() => setShopTab('packs')}
+        >
+          카드팩
+        </button>
+        <button
+          type="button"
+          className={'btn small' + (shopTab === 'etc' ? ' primary' : '')}
+          onClick={() => setShopTab('etc')}
+        >
+          기타
+        </button>
       </div>
-      <div id="pack-shelf">
-        {bootstrap.packs.map((pk) => {
-          const p = pk as { id: string; name: string; price: number };
-          const meta = PACK_META[p.id] || { img: '', desc: '', cls: '' };
-          return (
-            <div className={'pack-tile ' + meta.cls} key={p.id}>
-              {meta.img && <img className="pk-img" src={meta.img} alt="" />}
-              <div className="pk-info">
-                <span className="pk-name">{p.name}</span>
-                <span className="pk-desc">{meta.desc}</span>
-                <span className="pk-price">🪙 {p.price.toLocaleString()}</span>
+      {shopTab === 'packs' && (
+        <>
+          <div className="packs-intro dim">
+            팩을 열어 무작위 선수를 영입하세요. 이미 보유한 선수가 나오면 판매가(55%)만큼 코인으로 전환됩니다.
+          </div>
+          <div id="pack-shelf">
+            {bootstrap.packs.map((pk) => {
+              const p = pk as { id: string; name: string; price: number };
+              const meta = PACK_META[p.id] || { img: '', desc: '', cls: '' };
+              return (
+                <div className={'pack-tile ' + meta.cls} key={p.id}>
+                  {meta.img && <img className="pk-img" src={meta.img} alt="" />}
+                  <div className="pk-info">
+                    <span className="pk-name">{p.name}</span>
+                    <span className="pk-desc">{meta.desc}</span>
+                    <span className="pk-price">🪙 {p.price.toLocaleString()}</span>
+                  </div>
+                  <div className="pk-actions">
+                    <button type="button" className="btn small primary" onClick={() => openPack(p.id, 1)}>
+                      1회 뽑기
+                    </button>
+                    <button type="button" className="btn small" onClick={() => openPack(p.id, 5)}>
+                      5연속 🪙{(p.price * 5).toLocaleString()}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+      {shopTab === 'etc' && (
+        <>
+          <div className="packs-intro dim">
+            자동 시뮬레이션권: AI 대전·컵대회 경기 중 ⏩ 건너뛰기 버튼으로 사용하면 남은 경기를 즉시 결과로
+            건너뜁니다. (보유: {me?.simTickets || 0}장)
+          </div>
+          <div id="pack-shelf">
+            {(bootstrap.simTicketBundles || []).map((b) => (
+              <div className="pack-tile" key={b.count}>
+                <div className="pk-info">
+                  <span className="pk-name">⏩ 자동 시뮬레이션권 ×{b.count}</span>
+                  <span className="pk-desc">장당 🪙{(b.price / b.count).toFixed(0)} — 묶음이 클수록 저렴</span>
+                  <span className="pk-price">🪙 {b.price.toLocaleString()}</span>
+                </div>
+                <div className="pk-actions">
+                  <button type="button" className="btn small primary" onClick={() => buyTickets(b.count)}>
+                    구매
+                  </button>
+                </div>
               </div>
-              <div className="pk-actions">
-                <button type="button" className="btn small primary" onClick={() => openPack(p.id, 1)}>
-                  1회 뽑기
-                </button>
-                <button type="button" className="btn small" onClick={() => openPack(p.id, 5)}>
-                  5연속 🪙{(p.price * 5).toLocaleString()}
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
+        </>
+      )}
       {results && (
         <PackRevealModal
           results={results}

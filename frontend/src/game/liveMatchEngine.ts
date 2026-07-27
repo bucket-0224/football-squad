@@ -268,6 +268,9 @@ export class LiveMatchEngine {
   private duel: DuelState | null = null;
   private pendingHalf = false;
   private pendingHalfText: string | null = null;
+  // 자동 시뮬레이션권으로 건너뛰는 중 — 서버가 남은 이벤트를 한꺼번에
+  // 쏟아내므로 애니메이션 큐를 거치지 않고 피드/시계에 즉시 반영한다.
+  private skipping = false;
   private names: Record<Side, string> = { home: '', away: '' };
   private srvMin = 0;
   private dispMin = 0;
@@ -405,6 +408,7 @@ export class LiveMatchEngine {
     this.duel = null;
     this.pendingHalf = false;
     this.pendingHalfText = null;
+    this.skipping = false;
     this.names = { home: msg.home.name || '홈', away: msg.away.name || '어웨이' };
     this.srvMin = 0;
     this.dispMin = 0;
@@ -454,9 +458,19 @@ export class LiveMatchEngine {
   // (frame() 진행과 무관) "영원히 멈춘 스코어보드"로 되돌아가지 않는다.
   onTick(minute: number, display: string, score: { home: number; away: number }) {
     this.srvMin = minute;
-    this.dispMin = minute;
-    this.shownMin = minute;
-    this.cb.onMinute(display || minute + "'");
+    // 화면 시계는 frame()의 dispMin 애니메이션(지금 재생 중인 이벤트의 분에
+    // 고정 + 큐 헤드/서버 분으로 따라잡기)이 전담한다 — 예전엔 여기서 매
+    // 틱마다 dispMin/shownMin을 서버 분으로 덮어써서, 애니메이션은 아직
+    // 23분 이벤트를 재생 중인데 시계만 40분으로 앞서 달리는 "메시지-시간
+    // 비동기"와, 그 여파로 하프타임 배너가 시계상 60분 넘어서야 뜨는
+    // "늦은 하프타임"의 직접 원인이었다. 단 rAF가 스로틀되는 상황(탭
+    // 백그라운드 등 — 아래 catchUpAfterHidden 주석 참고)과 건너뛰기
+    // 중에는 frame()이 안 돌므로 그때만 예전처럼 즉시 반영한다.
+    if (!this.raf || this.skipping || document.visibilityState === 'hidden') {
+      this.dispMin = minute;
+      this.shownMin = minute;
+      this.cb.onMinute(display || minute + "'");
+    }
     const goalPending =
       this.queue.some((e) => e.type === 'goal') || (this.attack ? this.attack.e.type === 'goal' : false);
     if (!goalPending) this.cb.onScore(score.home, score.away);
@@ -465,8 +479,11 @@ export class LiveMatchEngine {
 
   onEvent(e: MatchEvent) {
     e.text = shortenEventText(e.text, e.player, e.assist);
-    if (this.raf) this.queue.push(e);
-    else this.cb.onFeedItem(e.minute + "'", e.text, e.type);
+    if (this.raf && !this.skipping) this.queue.push(e);
+    else {
+      if (this.skipping && e.score) this.cb.onScore(e.score.home, e.score.away);
+      this.cb.onFeedItem(e.minute + "'", e.text, e.type);
+    }
   }
 
   onPhase(text: string, half: boolean) {
@@ -517,8 +534,22 @@ export class LiveMatchEngine {
   }
 
   queueResult(msg: ResultMsg) {
-    if (this.raf) this.pendingResult = msg;
+    if (this.raf && !this.skipping) this.pendingResult = msg;
     else this.deliverResult(msg);
+  }
+
+  // 자동 시뮬레이션권(건너뛰기): 지금 쌓인 큐를 애니메이션 없이 피드로
+  // 즉시 비우고(catchUpAfterHidden과 동일한 정리), 이후 도착하는 이벤트/
+  // 틱/결과도 큐를 거치지 않고 바로 반영되도록 skipping 모드로 전환한다.
+  // 다음 경기 start()가 플래그를 다시 초기화한다.
+  fastForward() {
+    if (!this.active) return;
+    this.skipping = true;
+    // 대기 중이던 하프타임 연출도 의미가 없어졌다 — 남겨두면 결과 팝업
+    // 뒤에서 뒤늦게 하프타임 배너/킥오프가 재생된다.
+    this.pendingHalf = false;
+    this.pendingHalfText = null;
+    this.catchUpAfterHidden();
   }
 
   private deliverResult(msg: ResultMsg) {
@@ -1434,7 +1465,12 @@ export class LiveMatchEngine {
           ? this.queue[0].minute
           : this.srvMin;
     if (minTarget > this.dispMin) {
-      const rate = 1.54;
+      // 기본 1.54분/초(서버 틱 650ms/분과 동일 속도). 이벤트 애니메이션이
+      // 밀려 시계가 목표에서 크게 뒤처지면(예: 골 세리모니 연속) 같은
+      // 속도로는 영영 못 따라잡으므로, 격차가 6분을 넘는 만큼 최대 3배까지
+      // 가속해 조용히 따라붙는다 — 순간이동 없이.
+      const gap = minTarget - this.dispMin;
+      const rate = 1.54 * (gap > 6 ? Math.min(3, gap / 6) : 1);
       this.dispMin = Math.min(minTarget, this.dispMin + rate * dt);
     }
     const shownMin = Math.floor(this.dispMin);
@@ -1554,7 +1590,13 @@ export class LiveMatchEngine {
             this.stageKickoff('away');
           },
         });
-      } else if (this.queue.length) {
+      } else if (this.queue.length && !(this.pendingHalf && this.queue[0].minute > 45)) {
+        // 하프타임이 대기 중(pendingHalf)인데 큐 헤드가 이미 후반 이벤트면
+        // 시작하지 않고 홀드한다 — 예전엔 시계가 45분에 못 미친 상태에서
+        // 후반 이벤트(예: 52분)를 먼저 재생하기 시작해, 하프타임 배너가
+        // 그 애니메이션이 끝난 52분 시계에서야 뜨는 지연이 있었다. 홀드하는
+        // 동안 위 minTarget이 큐 헤드 분을 가리켜 시계가 45분을 지나므로
+        // 바로 위 pendingHalf 분기가 다음 프레임들에서 정상 발화한다.
         this.beginEvent(this.queue.shift() as MatchEvent);
       } else {
         this.runner = null;

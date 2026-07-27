@@ -450,9 +450,58 @@ function attach(server) {
         applyLiveSquad(ctx, side, formation, msg.starters);
         break;
       }
+      // 자동 시뮬레이션권 사용: AI전/컵 경기를 애니메이션 없이 즉시 결과로
+      // 건너뛴다. PvP는 상대(사람)의 관전 권리를 뺏으므로 허용하지 않는다.
+      case 'skip': {
+        const ctx = active.get(ws.userId);
+        if (!ctx) return send(ws, { type: 'error', error: '진행 중인 경기가 없습니다.' });
+        if (ctx.mode === 'pvp') {
+          return send(ws, { type: 'error', error: '사람과의 대전에서는 건너뛰기를 사용할 수 없습니다.' });
+        }
+        if ((user.simTickets || 0) <= 0) {
+          return send(ws, { type: 'error', error: '자동 시뮬레이션권이 없습니다. 상점의 기타 탭에서 구매할 수 있습니다.' });
+        }
+        user.simTickets = (user.simTickets || 0) - 1;
+        store.putUser(user);
+        send(ws, { type: 'skip_ok', simTickets: user.simTickets });
+        skipMatch(ctx);
+        break;
+      }
       default:
         break;
     }
+  }
+
+  // 남은 경기를 즉시 결과로 넘긴다 — 남은 분의 이벤트를 전부 흘려보내
+  // (피드/기록 누락 없음) 마지막 틱과 결과까지 한 번에 보낸다. 진행 중이던
+  // 작전 타임/메디컬 타임아웃은 의미가 없어지므로 정리하고, 아직 심판
+  // 프리뷰 단계(틱 시작 전)라면 0분부터 통째로 흘린다. 부상/태업 이벤트도
+  // 그대로 피드에 남지만 교체 프롬프트(triggerMedicalTimeout)는 띄우지
+  // 않는다 — 어차피 경기가 끝나는 중이다.
+  function skipMatch(ctx) {
+    clearTimeout(ctx.readyTimeout);
+    clearInterval(ctx.interval);
+    clearTimeout(ctx.pauseTimeout);
+    ctx.paused = false;
+    ctx.pausedBy = null;
+    const sockets = socketsOf(ctx);
+    sockets.forEach((s) => send(s, { type: 'skipped', fromMinute: ctx.minute }));
+    const finalMinute = 90 + (ctx.stoppage || 0);
+    while (ctx.minute < finalMinute) {
+      ctx.minute++;
+      const events = ctx.byMinute.get(ctx.minute) || [];
+      events.forEach((e) => {
+        if (e.type === 'goal') ctx.score = e.score;
+        sockets.forEach((s) => send(s, { type: 'event', event: e }));
+      });
+    }
+    sockets.forEach((s) =>
+      send(s, { type: 'tick', minute: ctx.minute, display: displayMinute(ctx.minute), score: ctx.score })
+    );
+    if (ctx.home.user) active.delete(ctx.home.user.id);
+    if (ctx.away.user) active.delete(ctx.away.user.id);
+    live.delete(ctx.id);
+    finishMatch(ctx);
   }
 
   function sideOf(ctx, userId) {
