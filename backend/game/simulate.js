@@ -431,7 +431,9 @@ function simulateMatch(homeSquad, awaySquad, homeName, awayName, opts = {}) {
   // 몬테카를로에서 홈 44% / 무 24% / 원정 32% 근방이 나오도록 튜닝했다.
   // AI전/컵대회는 유저가 항상 home이라(matchmaking.js) 유저에게 유리하게
   // 작용하는데, 이는 기존 승부차기 홈 우대와 같은 방향의 의도적 PvE 완화다.
-  const HOME_XG_BOOST = 1.18;
+  // opts.neutralVenue: PvP 토너먼트처럼 중립 구장에서 치르는 경기 — "먼저
+  // 입장한 쪽이 home"일 뿐 실제 홈 이점이 없어야 하므로 가산을 끈다.
+  const HOME_XG_BOOST = opts.neutralVenue ? 1 : 1.18;
   const xgHome =
     (xg(home.ATT, away.DEF, away.GK, possHome) * tHome.atk * counterBonus(tHome, tacAway) * HOME_XG_BOOST) /
     tAway.def;

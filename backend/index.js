@@ -22,6 +22,7 @@ const event = require('./event');
 const sbc = require('./game/sbc');
 const social = require('./social');
 const guild = require('./guild');
+const pvpcup = require('./pvpcup');
 
 // rebuild dynamically fetched clubs so persisted player ids keep resolving,
 // then fill in team badges + re-fetch pre-v2 rosters in the background
@@ -622,6 +623,14 @@ app.post('/api/packs/open', auth.authMiddleware, (req, res) => {
   const out = { results, user: sanitizeUser(req.user) };
   if (results.length === 1) Object.assign(out, results[0]); // single-draw shape
   res.json(out);
+});
+
+// ---- PvP 컵 토너먼트 ---------------------------------------------------------
+// 3일 주기 오버롤 시드 브라켓(최대 64강) — 상태 조회. 라운드/마감 정산은
+// publicState 안의 sweep이 게으르게 처리하고, '입장'(출석/경기 시작)은
+// WS 'queue_pvpcup'(matchmaking.js)로 한다.
+app.get('/api/pvpcup', auth.authMiddleware, (req, res) => {
+  res.json({ state: pvpcup.publicState(req.user) });
 });
 
 // ---- 상점 기타: 자동 시뮬레이션권 -------------------------------------------

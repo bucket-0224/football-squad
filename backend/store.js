@@ -14,6 +14,7 @@ const DEFAULT_DB = {
   season: { number: 1, startedAt: Date.now() },
   seasonHistory: [], // past season snapshots (capped)
   guilds: {},  // id -> guild (backend/guild.js)
+  pvpcup: null, // 3일 주기 PvP 컵 토너먼트 상태 (backend/pvpcup.js)
 };
 
 let db = null;
@@ -271,6 +272,18 @@ function allGuilds() {
   return Object.values(load().guilds);
 }
 
+// ---- PvP 컵 토너먼트 (backend/pvpcup.js) -----------------------------------
+
+function getPvpCup() {
+  return load().pvpcup || null;
+}
+
+function putPvpCup(doc) {
+  load().pvpcup = doc;
+  save();
+  return doc;
+}
+
 module.exports = {
   DB_FILE,
   get,
@@ -292,6 +305,8 @@ module.exports = {
   putGuild,
   deleteGuild,
   allGuilds,
+  getPvpCup,
+  putPvpCup,
   save,
   flushNow,
 };

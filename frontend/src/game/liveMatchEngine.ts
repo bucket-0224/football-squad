@@ -84,6 +84,9 @@ export interface ResultMsg {
   reward?: { coins: number; points: number };
   finalMinute?: number;
   cup?: CupMatchResult | null;
+  // PvP 토너먼트 진출 결과 — 프론트가 자기 진영(mySide)과 winnerSide를
+  // 비교해 진출/탈락을 표시한다. 무승부였다면 shootout에 승부차기 스코어.
+  pvpcup?: { winnerSide: 'home' | 'away'; shootout?: { homeScore: number; awayScore: number } | null } | null;
 }
 
 export interface LiveMatchCallbacks {

@@ -10,6 +10,7 @@ const { simulateMatch, simulateRemainder, TACTICS } = require('./game/simulate')
 const { coordFor } = require('./game/bands');
 const { pickReferee } = require('./referees');
 const mailbox = require('./mailbox');
+const pvpcup = require('./pvpcup');
 
 // 경기 시작 전 심판 프리뷰 팝업에서 "시작" 버튼을 누를 때까지 실제 시뮬레이션
 // 틱을 미룬다. 상대(사람)가 안 눌러도 무한정 기다리지 않도록 안전장치로 이
@@ -33,6 +34,9 @@ const MEDICAL_TIMEOUT_MS = 25 * 1000;
 const REWARDS = {
   pvp: { win: [500, 3], draw: [250, 1], loss: [120, 0] },
   ai: { win: [250, 1], draw: [120, 0], loss: [60, 0] },
+  // PvP 토너먼트(pvpcup.js) 라운드 경기 — 실제 유저 스쿼드 간 대결이므로
+  // 랭크 매치와 동일 보상. 진출/챔피언 보상은 pvpcup.js가 따로 얹는다.
+  pvpcup: { win: [500, 3], draw: [250, 1], loss: [120, 0] },
 };
 
 // 컵대회: 8강(0)->4강(1)->결승(2) 3라운드 싱글 엘리미네이션. 라운드가 오를수록
@@ -300,6 +304,27 @@ function attach(server) {
           return send(ws, { type: 'error', error: '선발 11명을 모두 배치한 뒤 도전할 수 있습니다.' });
         const err = startCup(ws, user);
         if (err) return send(ws, { type: 'error', error: err });
+        break;
+      }
+      // PvP 토너먼트 '입장' — 출석을 기록하고, 상대도 입장해 있으면 그
+      // 자리에서 실제 경기가 열린다. 상대가 아직이면 대기 상태만 알려준다
+      // (마감까지 상대가 안 들어오면 sweep이 몰수승 처리).
+      case 'queue_pvpcup': {
+        if (playing.has(ws.userId)) return send(ws, { type: 'error', error: '이미 경기 중입니다.' });
+        if (!squadReady(user))
+          return send(ws, { type: 'error', error: '선발 11명을 모두 배치한 뒤 참가할 수 있습니다.' });
+        const r = pvpcup.enter(user);
+        if (r.error) return send(ws, { type: 'error', error: r.error });
+        if (r.waiting) {
+          return send(ws, {
+            type: 'pvpcup_waiting',
+            deadline: r.deadline,
+            text: '출석 완료! 상대가 마감까지 입장하지 않으면 몰수승으로 진출합니다.',
+          });
+        }
+        removeFromQueue(ws);
+        leaveSpectate(ws);
+        startPvpCupMatch(ws, user, r.play);
         break;
       }
       case 'spectate_list': {
@@ -666,6 +691,35 @@ function attach(server) {
     });
   }
 
+  // PvP 토너먼트 라운드 경기: 상대는 실제 유저의 클럽 스쿼드지만 그 유저가
+  // 접속해 있을 필요는 없다(입장 시점의 스쿼드로 시뮬레이션 — 이미 양쪽 다
+  // 출석했을 때만 여기 도달한다). 중립 구장이라 홈 xG 가산이 없고, away에
+  // user 객체를 실어 보상/전적이 양쪽 모두에게 정상 반영된다. 무승부는
+  // finishMatch에서 승부차기로 진출자를 가른다.
+  function startPvpCupMatch(ws, user, play) {
+    const opp = store.getUser(play.opponentId);
+    if (!opp) {
+      pvpcup.releaseLock(user.id, play.opponentId, play.roundIdx);
+      return send(ws, { type: 'error', error: '상대 정보를 찾을 수 없습니다.' });
+    }
+    const us = liveSquad(user, user.squad);
+    const them = liveSquad(opp, opp.squad);
+    const referee = pickReferee();
+    const result = simulateMatch(us, them, user.clubName, opp.clubName, {
+      cardBias: referee.cardBias,
+      neutralVenue: true,
+    });
+    runMatch({
+      mode: 'pvpcup',
+      result,
+      referee,
+      pvpcup: { userId: user.id, opponentId: opp.id, roundIdx: play.roundIdx },
+      squads: { home: us, away: them },
+      home: { ws, user, name: user.clubName, logo: teamLogo(user.baseTeam), lineup: lineupOf(us) },
+      away: { ws: null, user: opp, name: opp.clubName, logo: teamLogo(opp.baseTeam), lineup: lineupOf(them) },
+    });
+  }
+
   // 컵대회: 진행 중인 런이 없으면(또는 직전 런이 끝났으면) 새 런을 시작하고
   // (하루 1회 제한), 진행 중이면 현재 라운드의 상대와 붙는다. 실패 시 에러
   // 메시지 문자열을 반환하고(호출자가 그대로 클라이언트에 보냄), 성공하면
@@ -809,7 +863,10 @@ function attach(server) {
     // 누르는 경우(연결 끊김 등)에 경기가 영영 안 시작되지 않도록
     // READY_TIMEOUT_MS 뒤엔 강제로 시작한다.
     ctx.readyHome = false;
-    ctx.readyAway = !away.user;
+    // 상대가 "시작"을 누를 수 있는 건 소켓이 살아 있는 실제 접속자뿐이다 —
+    // PvP 토너먼트처럼 user 객체는 있지만(보상/전적용) 오프라인이라 ws가
+    // 없는 상대는 처음부터 준비된 것으로 취급해야 경기가 곧장 시작된다.
+    ctx.readyAway = !(away.user && away.ws);
     ctx.readyTimeout = setTimeout(() => beginTicking(ctx), READY_TIMEOUT_MS);
   }
 
@@ -916,6 +973,23 @@ function attach(server) {
     const homeReward = applyReward(home);
     const awayReward = applyReward(away);
 
+    // PvP 토너먼트: 이 경기의 승자를 브라켓에 기록한다. 토너먼트는 무승부가
+    // 없으므로 동점이면 승부차기(컵대회와 동일한 GK 가중 공식)로 진출자를
+    // 가른다 — 스코어보드 표시는 무승부 그대로 두고 진출 여부만 갈린다.
+    let pvpcupInfo = null;
+    if (mode === 'pvpcup' && ctx.pvpcup) {
+      let winnerSide = score.home > score.away ? 'home' : score.away > score.home ? 'away' : null;
+      let shootout = null;
+      if (!winnerSide) {
+        const s = resolveShootout(result.ratings);
+        winnerSide = s.homeWins ? 'home' : 'away';
+        shootout = { homeScore: s.homeScore, awayScore: s.awayScore };
+      }
+      const winnerId = winnerSide === 'home' ? ctx.pvpcup.userId : ctx.pvpcup.opponentId;
+      pvpcup.recordResult(ctx.pvpcup.userId, ctx.pvpcup.opponentId, ctx.pvpcup.roundIdx, winnerId, score);
+      pvpcupInfo = { winnerSide, shootout };
+    }
+
     store.addMatch({
       id: 'm' + crypto.randomBytes(6).toString('hex'),
       at: new Date().toISOString(),
@@ -956,6 +1030,10 @@ function attach(server) {
       reward: reward ? { coins: reward.coins, points: reward.points } : null,
       balance: reward ? reward.balance : null,
       cup: reward ? reward.cup : null,
+      // PvP 토너먼트 진출 결과 — winnerSide('home'|'away')와, 무승부였다면
+      // 승부차기 스코어. 프론트가 자기 진영(youAre)과 비교해 진출/탈락을
+      // 표시한다.
+      pvpcup: pvpcupInfo,
       // 프론트가 90+추가시간이 실제로 다 지나기 전에 종료 팝업을 띄우지
       // 않도록 서버가 정한 "진짜 끝나는 분"을 같이 보낸다.
       finalMinute: 90 + (ctx.stoppage || 0),

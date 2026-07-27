@@ -115,6 +115,143 @@ function CupBracket({
   );
 }
 
+// ---- PvP 컵 토너먼트 (3일 주기, 오버롤 시드 브라켓, 몰수승 규정) ----
+
+interface PvpCupInfo {
+  status: string;
+  cycleId: number;
+  fieldSize: number;
+  cycleEndsAt: number;
+  champion?: { clubName: string; ovr: number } | null;
+  round?: string;
+  windowStart?: number;
+  windowEnd?: number;
+  windowOpen?: boolean;
+  opponent?: { clubName: string; ovr: number } | null;
+  attendedMe?: boolean;
+  attendedOpp?: boolean;
+  played?: boolean;
+  forfeit?: boolean;
+  mySeed?: number;
+}
+
+function fmtTime(ts?: number) {
+  if (!ts) return '';
+  return new Date(ts).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function PvpCupPanel({
+  state,
+  onEnter,
+  onRefresh,
+  disabled,
+  error,
+}: {
+  state: PvpCupInfo | null;
+  onEnter: () => void;
+  onRefresh: () => void;
+  disabled: boolean;
+  error: string;
+}) {
+  if (!state) {
+    return (
+      <div className="lobby-card cup-lobby-card">
+        <h2>🏟 PvP 토너먼트</h2>
+        <p className="dim small-text">불러오는 중…</p>
+      </div>
+    );
+  }
+
+  let body: React.ReactNode = null;
+  switch (state.status) {
+    case 'idle':
+      body = <p className="dim small-text">참가자가 부족해 이번 주기 토너먼트가 열리지 않았습니다.</p>;
+      break;
+    case 'not_in_bracket':
+      body = (
+        <p className="dim small-text">
+          이번 주기 브라켓({state.fieldSize}강)에 포함되지 않았습니다. 다음 주기에 자동으로 참가됩니다.
+        </p>
+      );
+      break;
+    case 'champion':
+      body = <p className="cup-result-note">🏆 이번 주기 우승! 보상이 우편함에 도착했습니다.</p>;
+      break;
+    case 'eliminated':
+      body = (
+        <p className="dim small-text">
+          {state.round ? `${state.round}에서 탈락했습니다.` : '이번 주기에서 탈락했습니다.'} 다음 초기화:{' '}
+          {fmtTime(state.cycleEndsAt)}
+        </p>
+      );
+      break;
+    case 'advanced':
+      body = (
+        <p className="dim small-text">
+          ✅ {state.round} 승리 — 다른 경기가 끝나면 다음 라운드 대진이 확정됩니다.
+        </p>
+      );
+      break;
+    case 'waiting_bracket':
+      body = <p className="dim small-text">다음 라운드 대진 확정을 기다리는 중입니다.</p>;
+      break;
+    case 'in_round':
+      body = (
+        <>
+          <p className="dim small-text">
+            {state.round} · 내 시드 #{state.mySeed} · 상대: <b>{state.opponent?.clubName || '?'}</b> (OVR{' '}
+            {state.opponent?.ovr ?? '?'})
+          </p>
+          <p className="dim small-text">
+            입장 가능 시간: {fmtTime(state.windowStart)} ~ {fmtTime(state.windowEnd)}
+            {state.windowOpen ? ' (지금 입장 가능!)' : ''}
+          </p>
+          {state.attendedMe && !state.attendedOpp && (
+            <p className="dim small-text">
+              ✅ 출석 완료 — 상대가 마감까지 입장하지 않으면 몰수승으로 진출합니다 (상대 승점 -3).
+            </p>
+          )}
+          {!state.attendedMe && (
+            <p className="dim small-text">⚠️ 마감까지 입장하지 않으면 몰수패 처리되고 승점이 3점 깎입니다.</p>
+          )}
+          <button type="button" className="btn primary big" disabled={disabled || !state.windowOpen} onClick={onEnter}>
+            {state.windowOpen
+              ? state.attendedOpp
+                ? '경기 시작 (상대 출석 완료)'
+                : state.attendedMe
+                  ? '재입장 (상대 대기 중)'
+                  : '토너먼트 입장'
+              : '입장 시간이 아닙니다'}
+          </button>
+        </>
+      );
+      break;
+    default:
+      body = <p className="dim small-text">상태를 불러오지 못했습니다.</p>;
+  }
+
+  return (
+    <div className="lobby-card cup-lobby-card">
+      <h2>🏟 PvP 토너먼트</h2>
+      <p className="dim small-text">
+        전체 유저를 오버롤 순으로 집계해 최대 64강 브라켓을 만듭니다(시드 배치 — 결승에서 최강 시드와 만나는
+        구조). 3일마다 초기화되며, 라운드 시간에 입장하지 않으면 몰수패와 함께 승점 3점이 깎입니다.
+      </p>
+      {state.fieldSize > 0 && (
+        <p className="dim small-text">
+          이번 주기: {state.fieldSize}강 · 초기화 {fmtTime(state.cycleEndsAt)}
+          {state.champion ? ` · 우승: ${state.champion.clubName}` : ''}
+        </p>
+      )}
+      {body}
+      <button type="button" className="btn ghost small" onClick={onRefresh}>
+        새로고침
+      </button>
+      <div className="error-msg">{error}</div>
+    </div>
+  );
+}
+
 function LiveMatchCanvas({ engine }: { engine: LiveMatchEngine }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -128,7 +265,8 @@ function LiveMatchCanvas({ engine }: { engine: LiveMatchEngine }) {
 export default function MatchTab({ visible }: { visible: boolean }) {
   const { me, bootstrap, catalog, token } = useAppStore();
   const [view, setView] = useState<'lobby' | 'live'>('lobby');
-  const [matchMode, setMatchMode] = useState<'quick' | 'cup'>('quick');
+  const [matchMode, setMatchMode] = useState<'quick' | 'cup' | 'pvpcup'>('quick');
+  const [pvpcupState, setPvpcupState] = useState<PvpCupInfo | null>(null);
   const [queued, setQueued] = useState(false);
   const [matchError, setMatchError] = useState('');
   const [spectateList, setSpectateList] = useState<SpectateRow[]>([]);
@@ -289,6 +427,10 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           }
           break;
         }
+        case 'pvpcup_waiting':
+          toast(String(msg.text || '출석 완료 — 상대의 입장을 기다립니다.'));
+          loadPvpCup();
+          break;
         case 'skip_ok': {
           const left = Number(msg.simTickets) || 0;
           const cur = useAppStore.getState().me;
@@ -441,6 +583,26 @@ export default function MatchTab({ visible }: { visible: boolean }) {
     sendWs({ type: 'queue_cup' });
   };
 
+  const onQueuePvpCup = () => {
+    setMatchError('');
+    sendWs({ type: 'queue_pvpcup' });
+  };
+
+  const loadPvpCup = async () => {
+    try {
+      const { state } = await api.get<{ state: PvpCupInfo }>('/api/pvpcup');
+      setPvpcupState(state);
+    } catch {
+      setPvpcupState(null);
+    }
+  };
+
+  // 토너먼트 서브 뷰를 열 때(그리고 경기에서 로비로 돌아올 때) 상태 갱신.
+  useEffect(() => {
+    if (visible && view === 'lobby' && matchMode === 'pvpcup') loadPvpCup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, view, matchMode]);
+
   // ---- pause panel (작전 타임 substitution) ----
   const pauseSlots = bootstrap?.formations[pauseFormation] || [];
   const pausePool = (me?.[poolKind === 'drawn' ? 'drawn' : 'owned'] || []) as string[];
@@ -526,6 +688,13 @@ export default function MatchTab({ visible }: { visible: boolean }) {
           <button type="button" className={matchMode === 'cup' ? 'active' : ''} onClick={() => setMatchMode('cup')}>
             🏆 컵대회
           </button>
+          <button
+            type="button"
+            className={matchMode === 'pvpcup' ? 'active' : ''}
+            onClick={() => setMatchMode('pvpcup')}
+          >
+            🏟 토너먼트
+          </button>
         </div>
         {matchMode === 'quick' ? (
           <div className="lobby-card">
@@ -554,8 +723,16 @@ export default function MatchTab({ visible }: { visible: boolean }) {
               {matchError}
             </div>
           </div>
-        ) : (
+        ) : matchMode === 'cup' ? (
           me.cup && <CupBracket cup={me.cup} onStart={onQueueCup} disabled={queued} error={matchError} />
+        ) : (
+          <PvpCupPanel
+            state={pvpcupState}
+            onEnter={onQueuePvpCup}
+            onRefresh={loadPvpCup}
+            disabled={queued}
+            error={matchError}
+          />
         )}
         <div className="lobby-card spectate-card">
           <h2>👀 관전</h2>
@@ -566,7 +743,9 @@ export default function MatchTab({ visible }: { visible: boolean }) {
             ) : (
               spectateList.map((m) => (
                 <div className="spec-row" key={m.id}>
-                  <span className="spec-mode">{m.mode === 'pvp' ? '랭크' : 'AI전'}</span>
+                  <span className="spec-mode">
+                    {m.mode === 'pvp' ? '랭크' : m.mode === 'pvpcup' ? '토너먼트' : m.mode === 'cup' ? '컵' : 'AI전'}
+                  </span>
                   <span className="spec-names">
                     {m.home} <b>{m.score.home} - {m.score.away}</b> {m.away}
                   </span>
@@ -774,6 +953,16 @@ export default function MatchTab({ visible }: { visible: boolean }) {
                       : resultMsg.cup.advanced
                       ? `🏆 ${CUP_ROUND_LABELS[resultMsg.cup.round]} 통과${resultMsg.cup.shootout ? ' (승부차기)' : ''} — 다음 라운드 진출!`
                       : `🏆 ${CUP_ROUND_LABELS[resultMsg.cup.round]}에서 탈락했습니다${resultMsg.cup.shootout ? ' (승부차기 패)' : ''}.`}
+                  </span>
+                </>
+              )}
+              {resultMsg.pvpcup && (
+                <>
+                  <br />
+                  <span className="cup-result-note">
+                    {resultMsg.pvpcup.winnerSide === mySide
+                      ? `🏟 토너먼트 승리${resultMsg.pvpcup.shootout ? ` (승부차기 ${resultMsg.pvpcup.shootout.homeScore}:${resultMsg.pvpcup.shootout.awayScore})` : ''} — 다음 라운드 진출!`
+                      : `🏟 토너먼트 탈락${resultMsg.pvpcup.shootout ? ' (승부차기 패)' : ''} — 다음 주기에 다시 도전하세요.`}
                   </span>
                 </>
               )}
